@@ -1,6 +1,27 @@
-# "25 x 5d6 + 2" | roll
-# "2xd20 vs 15" | roll -CR 19, 20
-filter roll( $CritHits = @() )
+<#
+.SYNOPSIS
+    Rolls dice expressions piped in as strings (e.g. "2d6+3", "4xd20").
+
+.DESCRIPTION
+    Parses strings like "25 x 5d6 + 2" (25 repetitions of 5d6+2) or
+    "2xd20 vs 15" (roll d20 twice against AC 15, highlighting hit/miss),
+    with automatic crit hit/miss detection and coloring for d20 rolls.
+
+    Kept as a pipeline filter (not a param-based function) so the original
+    usage style keeps working unchanged:
+        "25 x 5d6 + 2" | Invoke-DiceRoll
+        "2xd20 vs 15"  | roll -CritHits 19, 20
+
+.PARAMETER CritHits
+    Extra values (besides the natural max roll) that count as a critical
+    hit on a d20. Defaults to just the natural maximum (e.g. 20).
+
+.EXAMPLE
+    "25 x 5d6 + 2" | Invoke-DiceRoll
+.EXAMPLE
+    "2xd20 vs 15" | roll -CritHits 19, 20
+#>
+filter Invoke-DiceRoll( $CritHits = @() )
 {
     function e( $c, $t ){ "`e[$($c)m$($t)`e[0m" }
 
@@ -52,3 +73,5 @@ filter roll( $CritHits = @() )
 
     if( ($sides -ne 20) ){ Write-Host "`n$(e 90 Total) $sum" }
 }
+
+Set-Alias -Name roll -Value Invoke-DiceRoll
