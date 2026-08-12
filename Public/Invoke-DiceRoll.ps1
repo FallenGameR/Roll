@@ -17,7 +17,7 @@
     hit on a d20. Defaults to just the natural maximum (e.g. 20).
 
 .EXAMPLE
-    "25 x 5d6 + 2" | Invoke-DiceRoll
+    "25 x 5d6 + 2" | roll
 .EXAMPLE
     "2xd20 vs 15" | roll -CritHits 19, 20
 #>
