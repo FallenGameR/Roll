@@ -13,7 +13,9 @@
         'Update-MusicLibrary',
         'Resize-MusicThumbnail',
         'Split-YouTubeVideoByChapter',
-        'Get-MusicTrackList',
+        'Get-Track',
+        'Set-Track',
+        'Update-MusicGenreTag',
         'Invoke-DiceRoll'
     )
     AliasesToExport    = @('roll')

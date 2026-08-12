@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-    Splits a raw Genre id3 tag string into its individual tag tokens.
+    Splits a raw legacy-format Genre id3 tag string into its individual
+    tag tokens.
 
 .DESCRIPTION
-    Genre strings are space-separated groups, where each group can itself
-    contain "/"-separated alternative tags (e.g. "Background Dread/Secrets
-    Modern/SciFi"). Both separators are flattened into one ordered,
-    de-duplicated list of tokens.
+    Legacy Genre strings are space-separated groups, where each group can
+    itself contain "/"-separated alternative tags (e.g. "Background
+    Dread/Secrets Modern/SciFi"). Both separators are flattened into one
+    ordered, de-duplicated list of tokens.
 #>
 function Split-GenreTag {
     param(
@@ -20,12 +21,13 @@ function Split-GenreTag {
 
 <#
 .SYNOPSIS
-    Buckets a flat list of Genre tags into Type / Mood / Setting /
-    Modifier arrays using the known-tag dictionary in
-    Get-GenreTaxonomy.ps1. Tags not found in the dictionary are returned
-    under Unmatched instead of being silently dropped.
+    Buckets a flat list of legacy-format Genre tags into Intensity /
+    Emotion / Scene / Game / Type arrays plus IsIntro/IsOutro/IsUnsorted
+    booleans, using the dictionaries in Get-GenreTaxonomy.ps1. Tags found
+    in neither dictionary are returned under Unmatched instead of being
+    silently dropped.
 #>
-function ConvertTo-GenreCategory {
+function ConvertTo-GenreCategoryFromTokens {
     param(
         [Parameter(Mandatory)]
         [AllowEmptyCollection()]
@@ -33,17 +35,22 @@ function ConvertTo-GenreCategory {
     )
 
     $buckets = [ordered]@{
+        Intensity = [System.Collections.Generic.List[string]]::new()
+        Emotion   = [System.Collections.Generic.List[string]]::new()
+        Scene     = [System.Collections.Generic.List[string]]::new()
+        Game      = [System.Collections.Generic.List[string]]::new()
         Type      = [System.Collections.Generic.List[string]]::new()
-        Mood      = [System.Collections.Generic.List[string]]::new()
-        Setting   = [System.Collections.Generic.List[string]]::new()
-        Modifier  = [System.Collections.Generic.List[string]]::new()
         Unmatched = [System.Collections.Generic.List[string]]::new()
     }
+    $metaFlags = @{}
 
     foreach ($tag in $Tags) {
         $category = $script:RollGenreTaxonomy[$tag]
         if ($category) {
             $buckets[$category].Add($tag)
+        }
+        elseif ($script:RollGenreMetaTags -contains $tag) {
+            $metaFlags[$tag] = $true
         }
         else {
             $buckets['Unmatched'].Add($tag)
@@ -51,12 +58,134 @@ function ConvertTo-GenreCategory {
     }
 
     [PSCustomObject]@{
-        Type      = $buckets.Type.ToArray()
-        Mood      = $buckets.Mood.ToArray()
-        Setting   = $buckets.Setting.ToArray()
-        Modifier  = $buckets.Modifier.ToArray()
-        Unmatched = $buckets.Unmatched.ToArray()
+        Intensity  = $buckets.Intensity.ToArray()
+        Emotion    = $buckets.Emotion.ToArray()
+        Scene      = $buckets.Scene.ToArray()
+        Game       = $buckets.Game.ToArray()
+        Type       = $buckets.Type.ToArray()
+        IsIntro    = [bool]$metaFlags['Intro']
+        IsOutro    = [bool]$metaFlags['Outro']
+        IsUnsorted = [bool]$metaFlags['Unsorted']
+        Unmatched  = $buckets.Unmatched.ToArray()
     }
+}
+
+<#
+.SYNOPSIS
+    Parses a self-describing "Category:value1,value2 Category:value3"
+    Genre tag string (the non-ambiguous storage format) into a
+    category-name -> values-list ordered map. Order of categories in the
+    string is irrelevant; unrecognized category names are kept as-is so
+    callers can decide how to handle them.
+#>
+function ConvertFrom-GenreTagString {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Genre
+    )
+
+    $result = [ordered]@{}
+
+    foreach ($chunk in ($Genre -split '\s+' | Where-Object { $_ })) {
+        if ($chunk -match '^(?<cat>[A-Za-z]+):(?<vals>.+)$') {
+            $cat = $Matches.cat
+            if (-not $result.Contains($cat)) {
+                $result[$cat] = [System.Collections.Generic.List[string]]::new()
+            }
+            foreach ($v in ($Matches.vals -split ',' | Where-Object { $_ })) {
+                $result[$cat].Add($v)
+            }
+        }
+    }
+
+    $result
+}
+
+<#
+.SYNOPSIS
+    Buckets a raw Genre id3 tag string (either the legacy free-form
+    format or the newer self-describing "Category:value" format) into
+    Intensity / Emotion / Scene / Game / Type arrays plus
+    IsIntro/IsOutro/IsUnsorted booleans and an Unmatched array. This is
+    the single entry point Get-Track and Update-MusicGenreTag should use
+    for reading a Genre tag, regardless of which format a given file was
+    written in.
+
+.DESCRIPTION
+    Format is auto-detected: a Genre string is treated as the new
+    self-describing format if it contains a ":" (legacy tokens are plain
+    words and never contain one), otherwise it's parsed as legacy
+    free-form text via the known-tag dictionary.
+#>
+function ConvertTo-GenreCategory {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string]$Genre
+    )
+
+    if ($Genre -match ':') {
+        $parsed = ConvertFrom-GenreTagString -Genre $Genre
+        $meta = if ($parsed.Contains('Meta')) { $parsed['Meta'] } else { @() }
+        $unmatchedNames = $parsed.Keys | Where-Object {
+            $_ -notin @('Intensity', 'Emotion', 'Scene', 'Game', 'Type', 'Meta')
+        }
+        $unmatched = @(foreach ($name in $unmatchedNames) { $parsed[$name] })
+
+        [PSCustomObject]@{
+            Intensity  = @(if ($parsed.Contains('Intensity')) { $parsed['Intensity'] })
+            Emotion    = @(if ($parsed.Contains('Emotion')) { $parsed['Emotion'] })
+            Scene      = @(if ($parsed.Contains('Scene')) { $parsed['Scene'] })
+            Game       = @(if ($parsed.Contains('Game')) { $parsed['Game'] })
+            Type       = @(if ($parsed.Contains('Type')) { $parsed['Type'] })
+            IsIntro    = $meta -contains 'Intro'
+            IsOutro    = $meta -contains 'Outro'
+            IsUnsorted = $meta -contains 'Unsorted'
+            Unmatched  = $unmatched
+        }
+    }
+    else {
+        $tags = Split-GenreTag -Genre $Genre
+        ConvertTo-GenreCategoryFromTokens -Tags $tags
+    }
+}
+
+<#
+.SYNOPSIS
+    Serializes a parsed Genre category object (as returned by
+    ConvertTo-GenreCategory) back into the canonical self-describing
+    "Category:value1,value2" tag string, in a fixed category order so
+    repeated round-trips are stable/idempotent.
+#>
+function ConvertTo-GenreTagString {
+    param(
+        [Parameter(Mandatory)]
+        [PSCustomObject]$Category
+    )
+
+    $parts = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($name in $script:RollGenreCategoryOrder) {
+        $values = $Category.$name
+        if ($values -and $values.Count -gt 0) {
+            $parts.Add("$name`:$($values -join ',')")
+        }
+    }
+
+    $meta = [System.Collections.Generic.List[string]]::new()
+    if ($Category.IsIntro) { $meta.Add('Intro') }
+    if ($Category.IsOutro) { $meta.Add('Outro') }
+    if ($Category.IsUnsorted) { $meta.Add('Unsorted') }
+    if ($meta.Count -gt 0) {
+        $parts.Add("Meta:$($meta -join ',')")
+    }
+
+    if ($Category.Unmatched -and $Category.Unmatched.Count -gt 0) {
+        $parts.Add("Unmatched:$($Category.Unmatched -join ',')")
+    }
+
+    $parts -join ' '
 }
 
 <#

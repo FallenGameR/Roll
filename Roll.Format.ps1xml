@@ -13,19 +13,25 @@
             <Label>Name</Label>
           </TableColumnHeader>
           <TableColumnHeader>
+            <Label>Intensity</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Emotion</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Scene</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Game</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
             <Label>Type</Label>
           </TableColumnHeader>
           <TableColumnHeader>
-            <Label>Mood</Label>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>Setting</Label>
-          </TableColumnHeader>
-          <TableColumnHeader>
-            <Label>Modifier</Label>
-          </TableColumnHeader>
-          <TableColumnHeader>
             <Label>Situation</Label>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Description</Label>
           </TableColumnHeader>
         </TableHeaders>
         <TableRowEntries>
@@ -35,19 +41,32 @@
                 <PropertyName>Name</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>Type</PropertyName>
+                <PropertyName>Intensity</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>Mood</PropertyName>
+                <PropertyName>Emotion</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>Setting</PropertyName>
+                <PropertyName>Scene</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <PropertyName>Modifier</PropertyName>
+                <PropertyName>Game</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>
+                  @(
+                    $_.Type
+                    if ($_.IsIntro) { 'Intro' }
+                    if ($_.IsOutro) { 'Outro' }
+                    if ($_.IsUnsorted) { 'Unsorted' }
+                  ) -join ','
+                </ScriptBlock>
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>Situation</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Description</PropertyName>
               </TableColumnItem>
             </TableColumnItems>
           </TableRowEntry>
@@ -56,3 +75,4 @@
     </View>
   </ViewDefinitions>
 </Configuration>
+
