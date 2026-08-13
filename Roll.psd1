@@ -15,6 +15,8 @@
         'Split-YouTubeVideoByChapter',
         'Get-Track',
         'Set-Track',
+        'Export-Track',
+        'Import-Track',
         'Update-MusicGenreTag',
         'Invoke-DiceRoll'
     )

@@ -53,14 +53,7 @@
                 <PropertyName>Game</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
-                <ScriptBlock>
-                  @(
-                    $_.Type
-                    if ($_.IsIntro) { 'Intro' }
-                    if ($_.IsOutro) { 'Outro' }
-                    if ($_.IsUnsorted) { 'Unsorted' }
-                  ) -join ','
-                </ScriptBlock>
+                <PropertyName>Type</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>Situation</PropertyName>

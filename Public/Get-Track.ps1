@@ -14,13 +14,17 @@
       - Scene     = place + type of content (Depths/Urban/Tavern/Lively/
                     Chase/Investigation/Anomaly)
       - Game      = source-material era (Fantasy/Modern/SciFi)
-      - Type      = production hint (Effect = soundboard/sfx, Vocals =
-                    has singing/lyrics)
-      - IsIntro / IsOutro = campaign intro/outro theme markers
-      - IsUnsorted        = pipeline hasn't finished categorizing yet
-      - Unmatched = any tag not yet known to the dictionary (should
-                    normally be empty; a non-empty value means the
-                    taxonomy needs to be extended)
+      - Type      = catch-all bucket for everything that isn't
+                    Intensity/Emotion/Scene/Game: production hints
+                    (Effect = soundboard/sfx, Vocals = has singing/
+                    lyrics), the Intro/Outro campaign theme markers,
+                    Unsorted (pipeline hasn't finished categorizing this
+                    track yet), and any tag not yet known to the
+                    dictionary (should normally not appear; if it does,
+                    the taxonomy needs to be extended). These are all
+                    just elements of the same Type array - not separate
+                    boolean/array properties - so filtering for any of
+                    them is always `$_.Type -contains 'X'`.
 
     The Comment id3 tag is similarly split into:
       - Situation   = the scene/prompt the track suits
@@ -78,6 +82,22 @@ function Get-Track {
         $genreCategories = ConvertTo-GenreCategory -Genre $genre
         $commentParts = ConvertTo-CommentParts -Comment $flatComment
 
+        # Type is the single catch-all array for everything that isn't
+        # Intensity/Emotion/Scene/Game: the production-hint category
+        # values (Effect/Vocals), the Intro/Outro/Unsorted pipeline
+        # meta-flags, and any Unmatched (not-yet-categorized) tokens.
+        # These aren't rendered as an array from separate booleans/lists
+        # - they ARE array elements, exactly like Intensity/Emotion/Scene/
+        # Game, so every viewer (console table, Out-GridView, CSV export
+        # via Export-Track, ...) treats them identically instead of
+        # needing special-cased boolean/array properties.
+        $type = [System.Collections.Generic.List[string]]::new()
+        $type.AddRange([string[]]$genreCategories.Type)
+        if ($genreCategories.IsIntro) { $type.Add('Intro') }
+        if ($genreCategories.IsOutro) { $type.Add('Outro') }
+        if ($genreCategories.IsUnsorted) { $type.Add('Unsorted') }
+        $type.AddRange([string[]]$genreCategories.Unmatched)
+
         [PSCustomObject]@{
             PSTypeName  = 'Roll.MusicTrack'
             Name        = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
@@ -85,11 +105,7 @@ function Get-Track {
             Emotion     = $genreCategories.Emotion
             Scene       = $genreCategories.Scene
             Game        = $genreCategories.Game
-            Type        = $genreCategories.Type
-            IsIntro     = $genreCategories.IsIntro
-            IsOutro     = $genreCategories.IsOutro
-            IsUnsorted  = $genreCategories.IsUnsorted
-            Unmatched   = $genreCategories.Unmatched
+            Type        = $type.ToArray()
             Situation   = $commentParts.Situation
             Description = $commentParts.Description
             Source      = $commentParts.Source
