@@ -55,6 +55,7 @@ function Export-Track {
 
         [string]$Root = "C:\vaults\Music",
 
+        [Parameter(Position = 0)]
         [string]$Path = (Join-Path $script:RollRoot 'track-index.csv')
     )
 
