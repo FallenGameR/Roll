@@ -24,12 +24,33 @@ function Set-GenreTag {
     )
 
     $tempFile = Join-Path $File.DirectoryName "$([guid]::NewGuid()).mp3"
-    & $Ffmpeg -y -v error -i $File.FullName -map_metadata 0 -metadata "genre=$Genre" -codec copy -- $tempFile
+    try {
+        & $Ffmpeg -y -v error -i $File.FullName -map_metadata 0 -metadata "genre=$Genre" -codec copy -- $tempFile
 
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $tempFile)) {
-        Remove-Item -LiteralPath $tempFile -ErrorAction SilentlyContinue
-        throw "ffmpeg failed to rewrite Genre tag for '$($File.FullName)'"
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $tempFile)) {
+            throw "ffmpeg failed to rewrite Genre tag for '$($File.FullName)'"
+        }
+
+        # Move-Item -Force не перезаписывает файл, который держит другой
+        # процесс: Winamp с открытым плейлистом даёт невнятное "Cannot
+        # create a file when that file already exists". Говорим об этом
+        # прямо, иначе следующий раз снова искать полчаса.
+        try {
+            Move-Item -LiteralPath $tempFile -Destination $File.FullName `
+                -Force -ErrorAction Stop
+        }
+        catch {
+            throw ("Не удалось заменить '$($File.FullName)': файл занят " +
+                "другим процессом. Закрой Winamp (он держит треки из " +
+                "открытых плейлистов) и повтори. Исходная ошибка: " +
+                $_.Exception.Message)
+        }
     }
-
-    Move-Item -LiteralPath $tempFile -Destination $File.FullName -Force
+    finally {
+        # Временный файл остаётся после любого провала после ffmpeg, а не
+        # только при его собственной неудаче.
+        if (Test-Path -LiteralPath $tempFile) {
+            Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
 }

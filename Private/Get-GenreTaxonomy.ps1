@@ -17,10 +17,11 @@
                                Melancholy, Playful, Secrets, Divine,
                                Forbidden
       - Scene (place + type of content): Depths, Urban, Tavern, Lively,
-                               Chase, Investigation, Anomaly
+                               Chase, Travel, Investigation, Anomaly
       - Game (source setting): Fantasy, Modern, SciFi
       - Type (production hint): Effect (soundboard/sfx), Vocals (has
-                               singing/lyrics)
+                               singing/lyrics), Excluded (set aside from
+                               the playable library, kept for reference)
 
     Tags not covered by this dictionary (i.e. Intro, Outro, Unsorted) are
     pipeline meta-flags outside the category scheme and are handled
@@ -54,6 +55,7 @@ $script:RollGenreTaxonomy = @{
     'Tavern'        = 'Scene'
     'Lively'        = 'Scene'
     'Chase'         = 'Scene'
+    'Travel'        = 'Scene'
     'Investigation' = 'Scene'
     'Anomaly'       = 'Scene'
 
@@ -62,9 +64,12 @@ $script:RollGenreTaxonomy = @{
     'Modern'  = 'Game'
     'SciFi'   = 'Game'
 
-    # Type: production hint (soundboard effect vs. has vocals).
-    'Effect' = 'Type'
-    'Vocals' = 'Type'
+    # Type: production hint (soundboard effect vs. has vocals) plus
+    # Excluded, which marks a track set aside from the playable library
+    # (it lives under Music\Excluded and is kept only for reference).
+    'Effect'   = 'Type'
+    'Vocals'   = 'Type'
+    'Excluded' = 'Type'
 }
 
 <#

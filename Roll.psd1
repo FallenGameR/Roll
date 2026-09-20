@@ -17,7 +17,15 @@
         'Set-Track',
         'Export-Track',
         'Import-Track',
+        'New-Playlist',
+        'Export-Playlist',
+        'Import-WinampPlaylist',
+        'Sync-WinampPlaylist',
+        'Start-Kenku',
+        'Test-KenkuAudio',
+        'Repair-KenkuAudio',
         'Update-MusicGenreTag',
+        'Get-PngPrompt',
         'Invoke-DiceRoll'
     )
     AliasesToExport    = @('roll')

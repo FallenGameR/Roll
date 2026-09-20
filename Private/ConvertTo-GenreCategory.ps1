@@ -195,9 +195,15 @@ function ConvertTo-GenreTagString {
 
 .DESCRIPTION
     Comment format written by the annotation pipeline is:
-      <situation> | Description: <description> | Source: <url>
-    The trailing "| Source: <url>" segment is occasionally missing, in
-    which case Source comes back as $null.
+      <situation> | Description: <description> | Evidence: <evidence>
+      | Note: <note> | Source: <url>
+    Only the situation is mandatory. Evidence records which sources the
+    description was built from (acoustic measurement, YouTube comments,
+    web credits) and Note carries caveats such as "the scene is not
+    documented anywhere" - both were added when descriptions started
+    being derived from real sources instead of guesswork, and both are
+    optional. The trailing "| Source: <url>" segment is occasionally
+    missing, in which case Source comes back as $null.
 #>
 function ConvertTo-CommentParts {
     param(
@@ -208,22 +214,39 @@ function ConvertTo-CommentParts {
 
     $situation = $Comment
     $description = $null
+    $evidence = $null
+    $note = $null
     $source = $null
 
     $parts = $Comment -split '\s*\|\s*Description:\s*', 2
     if ($parts.Count -eq 2) {
         $situation = $parts[0].Trim()
+        $rest = $parts[1]
 
-        $rest = $parts[1] -split '\s*\|\s*Source:\s*', 2
-        $description = $rest[0].Trim()
-        if ($rest.Count -eq 2) {
-            $source = $rest[1].Trim()
-        }
+        # Порядок разбора обратный порядку записи: сначала отрезаем
+        # хвостовые секции, чтобы каждая предыдущая не утащила их в себя.
+        # "Source:" не совпадает с "Sources:" — двоеточие обязано идти
+        # сразу за словом, так что новые ключи старый разбор не ломают.
+        $tail = $rest -split '\s*\|\s*Source:\s*', 2
+        $rest = $tail[0]
+        if ($tail.Count -eq 2) { $source = $tail[1].Trim() }
+
+        $tail = $rest -split '\s*\|\s*Note:\s*', 2
+        $rest = $tail[0]
+        if ($tail.Count -eq 2) { $note = $tail[1].Trim() }
+
+        $tail = $rest -split '\s*\|\s*Evidence:\s*', 2
+        $rest = $tail[0]
+        if ($tail.Count -eq 2) { $evidence = $tail[1].Trim() }
+
+        $description = $rest.Trim()
     }
 
     [PSCustomObject]@{
         Situation   = $situation
         Description = $description
+        Evidence    = $evidence
+        Note        = $note
         Source      = $source
     }
 }

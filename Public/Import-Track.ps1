@@ -60,7 +60,10 @@ function Import-Track {
             Type        = ConvertTo-ArrayValue $_.Type
             Situation   = $_.Situation
             Description = $_.Description
+            Evidence    = $_.Evidence
+            Note        = $_.Note
             Source      = $_.Source
+            Path        = $_.Path
         }
     }
 }

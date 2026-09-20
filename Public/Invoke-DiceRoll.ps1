@@ -18,20 +18,21 @@
 
 .EXAMPLE
     "25 x 5d6 + 2" | roll
-.EXAMPLE
     "2xd20 vs 15" | roll -CritHits 19, 20
+    "6x d20 + 6 adv" | roll
 #>
 filter Invoke-DiceRoll( $CritHits = @() )
 {
     function e( $c, $t ){ "`e[$($c)m$($t)`e[0m" }
 
-    $parsed = $psitem -match "^((?<n>\d+)\s*x\s*)?(?<dices>\d+)?D(?<sides>\d+)(\s*\+\s*(?<mod>\d+)\s*)?(\s+VS\s+(?<ac>\d+))?$"
+    $parsed = $psitem -match "^((?<n>\d+)\s*x\s*)?(?<dices>\d+)?D(?<sides>\d+)(\s*\+\s*(?<mod>\d+)\s*)?(\s*(?<ad>ADV|DIS)\s*)?(\s+VS\s+(?<ac>\d+))?$"
     if( -not $parsed ){ throw "Dont know how to parse $psitem" }
 
     $n = [int] $Matches["n"]
     $dices = [int] $Matches["dices"]
     $sides = [int] $Matches["sides"]
     $mod = [int] $Matches["mod"]
+    $ad = $Matches["ad"]
     $ac = [int] $Matches["ac"]
     if( $n -eq 0 ){ $n = 1 }
     if( $dices -eq 0 ){ $dices = 1 }
@@ -49,6 +50,19 @@ filter Invoke-DiceRoll( $CritHits = @() )
         foreach( $d in 1..$dices )
         {
             $roll = Get-Random -Min 1 -Max ($sides+1)
+
+            if( $ad -eq "ADV")
+            {
+                $roll2 = Get-Random -Min 1 -Max ($sides+1)
+                $roll = [Math]::Max($roll, $roll2)
+            }
+
+            if( $ad -eq "DIS" )
+            {
+                $roll2 = Get-Random -Min 1 -Max ($sides+1)
+                $roll = [Math]::Min($roll, $roll2)
+            }
+
             if( $sides -eq 20 )
             {
                 if( $roll -eq 1         ){ $critMiss = $true }

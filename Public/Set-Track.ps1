@@ -43,14 +43,14 @@
     Melancholy/Playful/Secrets/Divine/Forbidden).
 
 .PARAMETER Scene
-    Replaces the Scene values (Depths/Urban/Tavern/Lively/Chase/
+    Replaces the Scene values (Depths/Urban/Tavern/Lively/Chase/Travel/
     Investigation/Anomaly).
 
 .PARAMETER Game
     Replaces the Game values (Fantasy/Modern/SciFi).
 
 .PARAMETER Type
-    Replaces the Type values (Effect/Vocals).
+    Replaces the Type values (Effect/Vocals/Excluded).
 
 .PARAMETER IsIntro
     Sets/clears the Intro meta-flag.

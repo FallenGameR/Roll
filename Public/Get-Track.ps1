@@ -29,7 +29,15 @@
     The Comment id3 tag is similarly split into:
       - Situation   = the scene/prompt the track suits
       - Description = the musical description ("Description: ...")
+      - Evidence    = which sources the description came from
+                      ("Evidence: ..."), $null if missing
+      - Note        = caveats about the track ("Note: ..."), $null if
+                      missing
       - Source      = the source URL ("Source: ..."), $null if missing
+
+    Path carries the full file path so callers can act on the file
+    itself - move it, retag it, add it to a playlist - without
+    re-resolving the track by name (names repeat across folders).
 
     Objects are tagged with the Roll.MusicTrack type name, which has a
     default table view (see Roll.Format.ps1xml) equivalent to
@@ -39,6 +47,15 @@
     Folder to scan for mp3s. Defaults to the RPG Music library root.
     Pass "." to scan the current working directory instead (handy for a
     quick, fast test run from a small subfolder).
+
+    Tracks under Music\Excluded are set aside from the playable library
+    and are skipped when scanning a parent folder, so they stay out of
+    the index and out of playlist queries. Point -Path straight at that
+    folder to inspect them anyway.
+
+.PARAMETER IncludeExcluded
+    Also return tracks that live under Music\Excluded when scanning a
+    parent folder.
 
 .EXAMPLE
     Get-Track
@@ -51,7 +68,9 @@
 #>
 function Get-Track {
     param(
-        [string]$Path = "C:\vaults\Music"
+        [string]$Path = "C:\vaults\Music",
+
+        [switch]$IncludeExcluded
     )
 
     $ErrorActionPreference = "Stop"
@@ -64,10 +83,32 @@ function Get-Track {
 
     $files = Get-ChildItem -LiteralPath $Path -Recurse -Filter *.mp3 -File
 
+    # Skipped by path, not by tag: a track dropped into Music\Excluded or
+    # Music\Deleted is out of the library even if nobody has retagged it
+    # yet. Scanning either folder directly still works, so the tracks
+    # stay reachable.
+    if (-not $IncludeExcluded) {
+        $scanRoot = [IO.Path]::GetFullPath($Path)
+        foreach ($name in 'Excluded', 'Deleted') {
+            $root = [IO.Path]::GetFullPath("C:\vaults\Music\$name")
+            if ($scanRoot.TrimEnd('\').StartsWith($root.TrimEnd('\'), 'OrdinalIgnoreCase')) {
+                continue
+            }
+            $prefix = $root + [IO.Path]::DirectorySeparatorChar
+            $files = $files | Where-Object {
+                -not $_.FullName.StartsWith($prefix, 'OrdinalIgnoreCase')
+            }
+        }
+    }
+
     foreach ($f in $files) {
         # A single ffprobe call reading both tags at once (via -of json)
         # instead of one call per tag roughly halves the per-file cost.
-        $json = & $ffprobe -v error -show_entries format_tags=genre,comment -of json -- $f.FullName
+        # ffprobe prints UTF-8, so the console has to decode it as UTF-8
+        # or Cyrillic in the Comment tag comes back as mojibake.
+        $json = Invoke-WithUtf8Console {
+            & $ffprobe -v error -show_entries format_tags=genre,comment -of json -- $f.FullName
+        }
         $probeTags = ($json -join "`n" | ConvertFrom-Json).format.tags
 
         $genre = $probeTags.genre
@@ -108,7 +149,10 @@ function Get-Track {
             Type        = $type.ToArray()
             Situation   = $commentParts.Situation
             Description = $commentParts.Description
+            Evidence    = $commentParts.Evidence
+            Note        = $commentParts.Note
             Source      = $commentParts.Source
+            Path        = $f.FullName
         }
     }
 }

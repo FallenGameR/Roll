@@ -26,6 +26,11 @@
     Root folder where a subfolder per playlist will be created. Defaults
     to the RPG music library (via the C:\vaults junction).
 
+.PARAMETER PlaylistName
+    Explicit subfolder name for the playlist. When omitted, the playlist
+    title reported by YouTube is used, which is often noisy (channel
+    names, "Full OST" suffixes and so on).
+
 .EXAMPLE
     Save-YouTubePlaylist -PlaylistUrl "https://www.youtube.com/watch?v=QpEyWegZ4PQ&list=PL2VAyAqd6lNqoAnhiI3iZAu-Bnr-C80DU"
 #>
@@ -34,7 +39,9 @@ function Save-YouTubePlaylist {
         [Parameter(Mandatory = $true)]
         [string]$PlaylistUrl,
 
-        [string]$OutputRoot = "C:\vaults\Music"
+        [string]$OutputRoot = "C:\vaults\Music",
+
+        [string]$PlaylistName
     )
 
     $ErrorActionPreference = "Stop"
@@ -53,6 +60,8 @@ function Save-YouTubePlaylist {
 
     New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 
+    $folderTemplate = if ($PlaylistName) { $PlaylistName } else { "%(playlist_title)s" }
+
     & $ytDlp `
         --ffmpeg-location $ffmpegDir `
         --js-runtimes "deno:$deno" `
@@ -62,6 +71,6 @@ function Save-YouTubePlaylist {
         --add-metadata `
         --ignore-errors `
         --download-archive "$OutputRoot\.archive.txt" `
-        -o "$OutputRoot\%(playlist_title)s\%(playlist_index)02d - %(title)s.%(ext)s" `
+        -o "$OutputRoot\$folderTemplate\%(playlist_index)02d - %(title)s.%(ext)s" `
         $PlaylistUrl
 }
