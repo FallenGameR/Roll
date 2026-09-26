@@ -17,8 +17,9 @@
 секцию Embedded Files - Excalidraw ищет файл по ключу оттуда, содержимое
 он не хэширует, лишь бы ключи сходились.
 
-Скрипт идемпотентный: если кружки уже заменены, второй запуск ничего не
-делает.
+Скрипт идемпотентный: если кружки уже заменены, второй запуск только
+подгонит размер токенов под текущий (он задан ниже и должен совпадать с
+`make-player-tokens.py`). Центр при этом остаётся на месте.
 """
 import hashlib
 import json
@@ -30,8 +31,11 @@ import lzstring
 
 VAULT = r"C:\vaults\Рудники Фанделвера"
 PLAYERS = os.path.join(VAULT, "Adventure", "Players")
+
+# размер токена на карте, тот же, что в make-player-tokens.py
+W, H = 38.52975918257891, 39.312
 DEFAULT_MAP = os.path.join(
-    VAULT, "_img", "alchemist", "Засада Гоблинов", "Засада гоблинов.excalidraw.md")
+    VAULT, "_img", "maps", "battles", "Засада гоблинов - бой.excalidraw.md")
 
 
 def party_order():
@@ -60,10 +64,21 @@ def main(path):
     drawing = json.loads(z.decompressFromBase64("".join(block.group(1).split())))
 
     order = party_order()
+    known = {file_id(n): n for n in order.values()}
     texts = {e["id"]: e for e in drawing["elements"] if e["type"] == "text"}
     drop, elements, used = set(), [], []
+    resized = 0
 
     for e in drawing["elements"]:
+        if e["type"] == "image" and e.get("fileId") in known:
+            if abs(e["width"] - W) > 1e-6 or abs(e["height"] - H) > 1e-6:
+                e["x"] += (e["width"] - W) / 2
+                e["y"] += (e["height"] - H) / 2
+                e["width"], e["height"] = W, H
+                e["version"] += 1
+                resized += 1
+            elements.append(e)
+            continue
         if e["type"] != "ellipse" or e["backgroundColor"] != "#ffffff":
             elements.append(e)
             continue
@@ -77,7 +92,8 @@ def main(path):
         used.append(name)
         elements.append({
             "id": e["id"], "type": "image",
-            "x": e["x"], "y": e["y"], "width": e["width"], "height": e["height"],
+            "x": e["x"] + (e["width"] - W) / 2, "y": e["y"] + (e["height"] - H) / 2,
+            "width": W, "height": H,
             "angle": e["angle"], "strokeColor": "transparent",
             "backgroundColor": "transparent", "fillStyle": "solid",
             "strokeWidth": 1, "strokeStyle": "solid", "roughness": 0,
@@ -90,18 +106,31 @@ def main(path):
             "crop": None, "index": e["index"], "status": "pending",
         })
 
-    if not used:
-        print("менять нечего: белых кружков с номерами партии нет")
-        return
-
     drawing["elements"] = [e for e in elements if e["id"] not in drop]
 
     text_lines = [f'{e["text"]} ^{e["id"]}'
                   for e in drawing["elements"] if e["type"] == "text"]
-    embedded = re.search(r"## Embedded Files\n(.*?)\n\n%%", src, re.S).group(1)
-    embedded = [l for l in embedded.strip().split("\n")
-                if l.strip() and "токен.png" not in l]
-    embedded += [f"{file_id(n)}: [[{n} токен.png]]" for n in used]
+    # ссылки на картинки: старые не трогаем, дописываем те, которых не хватает.
+    # раньше здесь вырезались все строки с токенами и заново добавлялись только
+    # заменённые на этом прогоне - на прогоне "только размер" карта оставалась
+    # без ссылок вообще
+    known = {file_id(n): n for n in order.values()}
+    known = {file_id(n): n for n in order.values()}
+    embedded = [l for l in
+                re.search(r"## Embedded Files\n(.*?)\n\n%%", src, re.S).group(1).strip().split("\n")
+                if l.strip()]
+    have = set(re.findall(r"^([0-9a-f]{40}):", "\n".join(embedded), re.M))
+    restored = 0
+    for e in drawing["elements"]:
+        fid = e.get("fileId")
+        if e["type"] == "image" and fid in known and fid not in have:
+            embedded.append(f"{fid}: [[{known[fid]} токен.png]]")
+            have.add(fid)
+            restored += 1
+
+    if not (used or resized or restored):
+        print("менять нечего: кружков партии нет, размеры и ссылки в порядке")
+        return
 
     packed = z.compressToBase64(json.dumps(drawing, ensure_ascii=False))
     wrapped = "\n\n".join(packed[i:i + 256] for i in range(0, len(packed), 256))
@@ -116,7 +145,12 @@ def main(path):
                  "```compressed-json\n" + wrapped + "\n```", out, flags=re.S)
 
     open(path, "w", encoding="utf-8").write(out)
-    print("заменено кружков:", len(used), "->", ", ".join(used))
+    if used:
+        print("заменено кружков:", len(used), "->", ", ".join(used))
+    if resized:
+        print("подогнано по размеру токенов:", resized)
+    if restored:
+        print("восстановлено ссылок на токены:", restored)
 
 
 if __name__ == "__main__":
