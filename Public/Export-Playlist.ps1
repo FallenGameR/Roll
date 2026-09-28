@@ -44,12 +44,9 @@ function Export-Playlist {
     $ErrorActionPreference = 'Stop'
     $full = (Resolve-Path -LiteralPath $Path).Path
     $lines = [System.IO.File]::ReadAllLines($full)
-    $name = [System.IO.Path]::GetFileNameWithoutExtension($full)
 
-    # Всё, что не страница локации - главы, правила, нулевая сессия -
-    # уезжает в начало списка под точкой: в дереве плеера это отделяет
-    # сквозные подборки от мест на карте.
-    if ($full -notmatch '\\Adventure\\Locations\\') { $name = ".$name" }
+    # Имя в дереве плеера: свойство `fn` из шапки, иначе имя файла.
+    $name = Get-PlaylistBaseName -Path $full
 
     $inSection = $false
     $sectionLevel = 0

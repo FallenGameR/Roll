@@ -1,1 +1,3 @@
 tracks-fzf-cache.tsv
+__pycache__/
+*.pyc

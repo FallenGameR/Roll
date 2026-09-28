@@ -25,7 +25,9 @@
         'Test-KenkuAudio',
         'Repair-KenkuAudio',
         'Update-MusicGenreTag',
+        'Start-MusicTagger',
         'Get-PngPrompt',
+        'Get-ExeIcon',
         'Invoke-DiceRoll'
     )
     AliasesToExport    = @('roll')

@@ -22,6 +22,10 @@ Excalidraw.
 половина стороны выреза, всё в долях от стороны портрета. Проверять
 удобно так: нарисовать круг поверх портрета и посмотреть, что в него
 попало.
+
+Про источник. По умолчанию токен режется из `<Имя>.png`, но ключ `src`
+в настройке персонажа задаёт другой файл. У Калиостро так и сделано: в
+раздатку идёт его обычный облик, а в токен - настоящий, без грима.
 """
 import hashlib
 import json
@@ -48,8 +52,9 @@ TOKENS = {
     "Эдрик": dict(cx=0.516, cy=0.126, r=0.140, ring="#c1662f"),
     "Эйра": dict(cx=0.492, cy=0.150, r=0.165, ring="#a82a1e"),
     "Кали Мейхем": dict(cx=0.500, cy=0.143, r=0.155, ring="#6b5fd6"),
-    "Калиостро Великолепный": dict(cx=0.458, cy=0.095, r=0.165, ring="#0f5a4e"),
-    "Ириван": dict(cx=0.473, cy=0.199, r=0.165, ring="#2f6b18"),
+    "Калиостро Великолепный": dict(cx=0.536, cy=0.313, r=0.276, ring="#14663c",
+                                   src="Калиостро Великолепный - без грима"),
+    "Ириван": dict(cx=0.473, cy=0.199, r=0.192, ring="#2f6b18"),
 }
 
 INDEX = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -69,7 +74,7 @@ def crop_head(img, cx, cy, r):
 
 
 def make_token(name, cfg):
-    src = Image.open(os.path.join(SRC, name + ".png")).convert("RGB")
+    src = Image.open(os.path.join(SRC, cfg.get("src", name) + ".png")).convert("RGB")
     big = SIZE * SS
     head = crop_head(src, cfg["cx"], cfg["cy"], cfg["r"]).resize((big, big), Image.LANCZOS)
 

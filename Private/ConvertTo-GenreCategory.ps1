@@ -22,7 +22,7 @@ function Split-GenreTag {
 <#
 .SYNOPSIS
     Buckets a flat list of legacy-format Genre tags into Intensity /
-    Emotion / Scene / Game / Type arrays plus IsIntro/IsOutro/IsUnsorted
+    Emotion / Scene / Game / Type arrays plus IsUnsorted/IsExcluded/IsDelete
     booleans, using the dictionaries in Get-GenreTaxonomy.ps1. Tags found
     in neither dictionary are returned under Unmatched instead of being
     silently dropped.
@@ -63,9 +63,9 @@ function ConvertTo-GenreCategoryFromTokens {
         Scene      = $buckets.Scene.ToArray()
         Game       = $buckets.Game.ToArray()
         Type       = $buckets.Type.ToArray()
-        IsIntro    = [bool]$metaFlags['Intro']
-        IsOutro    = [bool]$metaFlags['Outro']
         IsUnsorted = [bool]$metaFlags['Unsorted']
+        IsExcluded = [bool]$metaFlags['Excluded']
+        IsDelete   = [bool]$metaFlags['Delete']
         Unmatched  = $buckets.Unmatched.ToArray()
     }
 }
@@ -107,7 +107,7 @@ function ConvertFrom-GenreTagString {
     Buckets a raw Genre id3 tag string (either the legacy free-form
     format or the newer self-describing "Category:value" format) into
     Intensity / Emotion / Scene / Game / Type arrays plus
-    IsIntro/IsOutro/IsUnsorted booleans and an Unmatched array. This is
+    IsUnsorted/IsExcluded/IsDelete booleans and an Unmatched array. This is
     the single entry point Get-Track and Update-MusicGenreTag should use
     for reading a Genre tag, regardless of which format a given file was
     written in.
@@ -139,9 +139,9 @@ function ConvertTo-GenreCategory {
             Scene      = @(if ($parsed.Contains('Scene')) { $parsed['Scene'] })
             Game       = @(if ($parsed.Contains('Game')) { $parsed['Game'] })
             Type       = @(if ($parsed.Contains('Type')) { $parsed['Type'] })
-            IsIntro    = $meta -contains 'Intro'
-            IsOutro    = $meta -contains 'Outro'
             IsUnsorted = $meta -contains 'Unsorted'
+            IsExcluded = $meta -contains 'Excluded'
+            IsDelete   = $meta -contains 'Delete'
             Unmatched  = $unmatched
         }
     }
@@ -174,9 +174,9 @@ function ConvertTo-GenreTagString {
     }
 
     $meta = [System.Collections.Generic.List[string]]::new()
-    if ($Category.IsIntro) { $meta.Add('Intro') }
-    if ($Category.IsOutro) { $meta.Add('Outro') }
     if ($Category.IsUnsorted) { $meta.Add('Unsorted') }
+    if ($Category.IsExcluded) { $meta.Add('Excluded') }
+    if ($Category.IsDelete) { $meta.Add('Delete') }
     if ($meta.Count -gt 0) {
         $parts.Add("Meta:$($meta -join ',')")
     }

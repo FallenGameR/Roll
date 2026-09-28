@@ -134,9 +134,9 @@ function Get-Track {
         # needing special-cased boolean/array properties.
         $type = [System.Collections.Generic.List[string]]::new()
         $type.AddRange([string[]]$genreCategories.Type)
-        if ($genreCategories.IsIntro) { $type.Add('Intro') }
-        if ($genreCategories.IsOutro) { $type.Add('Outro') }
         if ($genreCategories.IsUnsorted) { $type.Add('Unsorted') }
+        if ($genreCategories.IsExcluded) { $type.Add('Excluded') }
+        if ($genreCategories.IsDelete) { $type.Add('Delete') }
         $type.AddRange([string[]]$genreCategories.Unmatched)
 
         [PSCustomObject]@{

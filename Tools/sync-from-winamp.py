@@ -13,10 +13,19 @@
   сцены;
 * плейлист удалён целиком -> убирается вся сцена (для ситуации или
   эффекта это одна строка);
-* одна звезда -> трек больше не нужен: mp3 уезжает в Music\\Deleted,
-  а ссылки на него исчезают из всех файлов кампании;
-* пять звёзд -> трек хорош: если он лежал в Music\\Unsorted, файл
-  переезжает в обычную папку франшизы, звёздочка в markdown снимается.
+* тег Meta:Delete -> послушали, не понравилось: mp3 уезжает в
+  Music\\Deleted, ссылки на него исчезают из файлов кампании;
+* тег Meta:Excluded -> отложен на потом: то же самое, но в
+  Music\\Excluded;
+* любая оценка звёздами -> трек разобран: снимается тег Unsorted, файл
+  переезжает из Music\\Unsorted в обычную папку франшизы, ссылки в
+  кампании переписываются на новый путь.
+
+Теги Delete и Excluded после переезда остаются: они описывают состояние
+трека, а не разовое поручение. Раньше выбрасывала одна звезда. От этого
+отказались, когда звёзды стали настоящей оценкой: единица
+посредственному, но нужному треку не должна стоить ему места в
+библиотеке.
 
 Рейтинг читается из тега POPM самого mp3, поэтому в Winamp должна быть
 включена запись рейтингов в файлы (Preferences -> Media Library ->
@@ -135,12 +144,34 @@ def scan_markdown():
     return files
 
 
-def playlist_title(md, scene):
+def playlist_base_name(md):
+    """Имя файла в дереве плеера: свойство `playlist` или имя файла."""
+    try:
+        lines = md.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    if lines and lines[0].strip() == "---":
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            m = re.match(r"^playlist:\s*(.+?)\s*$", line)
+            if m:
+                value = m.group(1).strip()
+                if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+                    value = value[1:-1]
+                if value:
+                    return value
+                break
     name = md.stem
     if "\\Adventure\\Locations\\" not in str(md):
         # Точка в начале уводит сквозные подборки наверх дерева плеера,
         # отдельно от мест на карте.
         name = "." + name
+    return name
+
+
+def playlist_title(md, scene):
+    name = playlist_base_name(md)
     if scene in ("Ситуации", "Эффекты"):
         return None            # у них имя собирается из ярлыка
     return f"{name} - {scene}" if scene else name
@@ -174,6 +205,41 @@ def drop_track_everywhere(files, path, apply):
         count += len(drop)
         if apply:
             remove_lines(md, data, drop)
+    return count
+
+
+def genre_of(path):
+    """Строка тега genre или пустая строка."""
+    try:
+        from mutagen.id3 import ID3
+        frames = ID3(path).getall("TCON")
+    except Exception:
+        return ""
+    return frames[0].text[0] if frames and frames[0].text else ""
+
+
+def has_meta(genre, value):
+    """Есть ли значение в категории Meta."""
+    for chunk in genre.split():
+        category, _, values = chunk.partition(":")
+        if category == "Meta" and value in values.split(","):
+            return True
+    return False
+
+
+def repath_track_everywhere(files, old_path, new_path, apply):
+    """Переписывает ссылки на трек, когда файл переехал в другую папку."""
+    old_url = "file:///" + urllib.parse.quote(old_path.replace("\\", "/"), safe="/:")
+    new_url = "file:///" + urllib.parse.quote(new_path.replace("\\", "/"), safe="/:")
+    count = 0
+    for md, data in files.items():
+        if not any(old_url in line for line in data["lines"]):
+            continue
+        lines = [line.replace(old_url, new_url) for line in data["lines"]]
+        count += sum(1 for line in data["lines"] if old_url in line)
+        if apply:
+            data["lines"] = lines
+            write_lines(md, lines)
     return count
 
 
@@ -213,40 +279,165 @@ def clear_unsorted_tag(path):
     return True
 
 
-def handle_ratings(files, apply):
-    """Одна звезда - в Deleted, пять - снять тег Unsorted."""
-    ratings = read_all_ratings()
-    rated = {path: stars for path, stars in ratings.items() if stars}
-    print(f"  оценено треков: {len(rated)} из {len(ratings)}")
+def stars_of(path):
+    """Оценка трека из файла: число звёзд, либо None, если её там нет.
 
-    banished = promoted = 0
+    Ноль во фрейме POPM - это осознанно снятая оценка, а не её отсутствие.
+    """
+    try:
+        from mutagen.id3 import ID3
+        popm = ID3(path).getall("POPM")
+    except Exception:
+        return None
+    if not popm:
+        return None
+    best = max(f.rating for f in popm)
+    for stars, edge in ((5, 224), (4, 160), (3, 96), (2, 32), (1, 1)):
+        if best >= edge:
+            return stars
+    return 0
+
+
+def set_stars(path, stars):
+    """Переносит оценку из базы плеера в сам файл."""
+    try:
+        from mutagen.id3 import ID3, POPM
+        from mutagen.id3._util import ID3NoHeaderError
+        try:
+            tags = ID3(path)
+        except ID3NoHeaderError:
+            tags = ID3()
+        tags.delall("POPM")
+        tags.add(POPM(email="rating@winamp.com",
+                      rating={1: 1, 2: 64, 3: 128, 4: 196, 5: 255}.get(stars, 0),
+                      count=0))
+        tags.save(path, v2_version=3)
+        return True
+    except Exception:
+        return False
+
+
+def handle_ratings(files, apply):
+    """Любая оценка означает, что трек отслушан.
+
+    Раньше смысл был у двух значений: одна звезда выбрасывала трек, пять
+    снимали пометку «не отслушано». Теперь звёзды - просто оценка, а
+    выбрасывает отдельный тег Meta:Delete. Отслушанным же трек делает сам
+    факт оценки: Мастер её поставил, значит слушал.
+
+    Оценок два источника: база медиатеки плеера и фрейм POPM в самом
+    файле, куда пишет Start-MusicTagger. Правда - файл, потому что база
+    привязана к путям и осиротеет при первом же переименовании. Поэтому
+    здесь оценки из базы сперва вливаются в файлы, где их ещё нет, а
+    дальше работа идёт только по файлам.
+
+    Отслушанный трек уезжает из Music\\Unsorted в обычную папку франшизы -
+    ту же по имени, уровнем выше. Ссылки в файлах кампании переписываются
+    на новый путь, звёздочка неотслушанного снимается.
+    """
+    from_db = read_all_ratings()
+    merged = 0
+    for path, stars in from_db.items():
+        if stars and Path(path).exists() and stars_of(path) is None:
+            merged += 1
+            if apply:
+                set_stars(path, stars)
+    if merged:
+        print(f"  перенесено оценок из плеера в файлы: {merged}")
+
+    rated = {}
+    for mp3 in MUSIC.rglob("*.mp3"):
+        if DELETED in mp3.parents:
+            continue
+        stars = stars_of(str(mp3))
+        if not stars:
+            # Либо оценки нет, либо она снята - в обоих случаях делать нечего.
+            # На сухом прогоне оценка из базы ещё не переехала в файл.
+            if not apply and from_db.get(str(mp3), 0) and stars is None:
+                stars = from_db[str(mp3)]
+            else:
+                continue
+        rated[str(mp3)] = stars
+    print(f"  оценённых треков: {len(rated)}")
+
+    promoted = moved = 0
     for path, stars in sorted(rated.items()):
         mp3 = Path(path)
-        if not mp3.exists() or DELETED in mp3.parents:
+        unsorted = has_unsorted_tag(str(mp3))
+        in_unsorted_folder = (MUSIC / "Unsorted") in mp3.parents
+        if not unsorted and not in_unsorted_folder:
             continue
-        if stars == 1:
-            banished += 1
-            print(f"  одна звезда: {mp3.name} -> Deleted")
-            if apply:
-                DELETED.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(mp3), str(DELETED / mp3.name))
-                drop_track_everywhere(files, str(mp3), apply)
-        elif stars == 5:
-            # Файл остаётся на месте: перенос из Unsorted - отдельная
-            # пакетная операция в конце кампании. Здесь только снимаем
-            # метку «не отслушано».
-            if not has_unsorted_tag(str(mp3)):
-                print(f"  пять звёзд: {mp3.name} -> уже отслушан, "
-                      "делать нечего")
-                continue
-            promoted += 1
-            if not apply:
-                print(f"  пять звёзд: {mp3.name} -> снять Unsorted")
-                continue
-            if clear_unsorted_tag(str(mp3)):
-                print(f"  пять звёзд: {mp3.name} -> Unsorted снят")
+
+        promoted += 1
+        if unsorted:
+            print(f"  {stars}*: {mp3.name} -> снять Unsorted")
+            if apply and clear_unsorted_tag(str(mp3)):
                 unstar(files, str(mp3))
-    return banished, promoted
+
+        # Раскладка по франшизам: Unsorted\Witcher -> Witcher. Огрызки из
+        # Unsorted\Misc так же едут в общий Misc.
+        if in_unsorted_folder:
+            target_dir = MUSIC / mp3.parent.name
+            target = target_dir / mp3.name
+            if target.exists():
+                print(f"  {stars}*: {mp3.name} -> в {target_dir.name} уже есть такой, "
+                      "оставляю на месте")
+                continue
+            moved += 1
+            print(f"  {stars}*: {mp3.name} -> {target_dir.name}\\")
+            if apply:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.move(str(mp3), str(target))
+                except OSError as exc:
+                    # Winamp держит играющий файл и всё, что в открытых
+                    # плейлистах. Тег записать он даёт, а переместить нет,
+                    # поэтому переезд просто откладывается до следующего раза.
+                    moved -= 1
+                    print(f"     занят плеером, оставляю на месте: {exc.strerror or exc}")
+                    continue
+                repath_track_everywhere(files, str(mp3), str(target), apply)
+    return promoted, moved
+
+
+def handle_pending_moves(files, apply):
+    """Выполняет отложенные действия: теги Delete и Excluded переносят файл.
+
+    Тег ставится на слух и означает решение о треке: Delete - послушали и не
+    понравилось, Excluded - отложили на потом. Исполняется решение здесь:
+    файл уезжает в свою папку, ссылки на него уходят из подборок кампании -
+    ни выброшенный, ни отложенный в игре не звучат.
+
+    Тег после переезда остаётся: он описывает состояние трека, а не разовое
+    поручение, и по нему видно, почему файл оказался в этой папке. Повторный
+    прогон такие треки просто не трогает - они уже на месте.
+    """
+    moves = {"Delete": DELETED, "Excluded": MUSIC / "Excluded"}
+    done = {"Delete": 0, "Excluded": 0}
+
+    for mp3 in sorted(MUSIC.rglob("*.mp3")):
+        genre = genre_of(str(mp3))
+        for value, target_dir in moves.items():
+            if not has_meta(genre, value):
+                continue
+            if target_dir in mp3.parents:
+                continue        # уже там, где просили
+            done[value] += 1
+            target = target_dir / mp3.name
+            if target.exists():
+                target = target_dir / f"{mp3.stem} ({mp3.parent.name}){mp3.suffix}"
+            print(f"  {value}: {mp3.name} -> {target_dir.name}\\")
+            if apply:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.move(str(mp3), str(target))
+                except OSError as exc:
+                    done[value] -= 1
+                    print(f"     занят плеером, оставляю на месте: {exc.strerror or exc}")
+                    break
+                drop_track_everywhere(files, str(mp3), apply)
+            break
+    return done
 
 
 def has_unsorted_tag(path):
@@ -363,8 +554,12 @@ def main():
         print("  выгрузи их Export-Playlist, иначе правки оттуда не вернутся")
 
     print("звёзды:")
-    banished, promoted = handle_ratings(files, apply)
-    print(f"  в Deleted: {banished}, снято Unsorted: {promoted}")
+    promoted, moved = handle_ratings(files, apply)
+    print(f"  отслушано: {promoted}, переложено из Unsorted: {moved}")
+
+    print("отложенные действия:")
+    done = handle_pending_moves(files, apply)
+    print(f"  в Deleted: {done['Delete']}, в Excluded: {done['Excluded']}")
 
     if not apply:
         print("сухой прогон, для записи добавь --apply")

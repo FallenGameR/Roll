@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Sets one or more Genre category values (Intensity/Emotion/Scene/Game/
-    Type/IsIntro/IsOutro/IsUnsorted) on a single mp3 file or every mp3
+    Type/IsUnsorted/IsExcluded/IsDelete) on a single mp3 file or every mp3
     under a folder, leaving categories that weren't passed untouched.
 
 .DESCRIPTION
@@ -50,18 +50,21 @@
     Replaces the Game values (Fantasy/Modern/SciFi).
 
 .PARAMETER Type
-    Replaces the Type values (Effect/Vocals/Excluded).
-
-.PARAMETER IsIntro
-    Sets/clears the Intro meta-flag.
-
-.PARAMETER IsOutro
-    Sets/clears the Outro meta-flag.
+    Replaces the Type values (Effect/Vocals/Intro/Outro).
 
 .PARAMETER IsUnsorted
-    Sets/clears the Unsorted meta-flag. Pass -IsUnsorted:$false once a
-    track has been fully categorized to clear the pipeline's "not yet
-    reviewed" marker.
+    Подвешенное состояние трека: ещё не слушали или слушали и не
+    решили. К игре допускается. Любая оценка звёздами эту метку
+    снимает.
+
+.PARAMETER IsExcluded
+    Отложен насовсем: на игре применять не хочется, слушать даже на
+    пробу тоже, но пусть лежит на потом.
+
+.PARAMETER IsDelete
+    Послушали, не понравилось. Файл остаётся на месте, пока
+    Sync-WinampPlaylist не уберёт помеченные в Music\Deleted и не
+    вычистит ссылки из подборок.
 
 .PARAMETER Apply
     Actually rewrite the Genre tag in place. Without this switch, the
@@ -87,9 +90,9 @@ function Set-Track {
         [string[]]$Game,
         [string[]]$Type,
 
-        [bool]$IsIntro,
-        [bool]$IsOutro,
         [bool]$IsUnsorted,
+        [bool]$IsExcluded,
+        [bool]$IsDelete,
 
         [switch]$Apply
     )
@@ -120,9 +123,9 @@ function Set-Track {
         if ($PSBoundParameters.ContainsKey('Scene')) { $category.Scene = $Scene }
         if ($PSBoundParameters.ContainsKey('Game')) { $category.Game = $Game }
         if ($PSBoundParameters.ContainsKey('Type')) { $category.Type = $Type }
-        if ($PSBoundParameters.ContainsKey('IsIntro')) { $category.IsIntro = $IsIntro }
-        if ($PSBoundParameters.ContainsKey('IsOutro')) { $category.IsOutro = $IsOutro }
         if ($PSBoundParameters.ContainsKey('IsUnsorted')) { $category.IsUnsorted = $IsUnsorted }
+        if ($PSBoundParameters.ContainsKey('IsExcluded')) { $category.IsExcluded = $IsExcluded }
+        if ($PSBoundParameters.ContainsKey('IsDelete')) { $category.IsDelete = $IsDelete }
 
         $newGenre = ConvertTo-GenreTagString -Category $category
 

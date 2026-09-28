@@ -1,14 +1,22 @@
 <#
 .SYNOPSIS
-    Rewrites just the Genre id3 tag of a single mp3 file in place, without
-    touching any other tag or re-encoding the audio.
+    Переписывает тег Genre одного mp3 на месте, не трогая ни звук, ни
+    остальные теги.
 
 .DESCRIPTION
-    Re-muxes the file into a temp copy via ffmpeg with `-codec copy
-    -map_metadata 0 -metadata genre=<value>` (audio untouched, every other
-    tag such as Comment/Title preserved, only Genre differs), then swaps
-    the temp copy in atomically once ffmpeg confirms success. Shared by
-    Update-MusicGenreTag (bulk reformat) and Set-Track (targeted tagging).
+    Раньше это делал ffmpeg: пересобирал файл во временную копию и
+    подменял оригинал. Работало всюду, кроме единственного места, где
+    нужнее всего - на треке, который звучит прямо сейчас. Winamp держит
+    открытым то, что играет, и подмена срывалась невнятным "Cannot
+    create a file when that file already exists".
+
+    Оказалось, плеер запрещает не запись в файл, а именно его замену:
+    открыть mp3 на запись он даёт. Поэтому правка идёт поверх
+    существующего ID3-блока, через Tools\write_genre.py. Отсюда же
+    следует, что закрывать Winamp перед тегированием больше не нужно.
+
+    Общая точка для Update-MusicGenreTag (массовый перевод формата) и
+    Set-Track (точечная простановка).
 #>
 function Set-GenreTag {
     param(
@@ -23,34 +31,17 @@ function Set-GenreTag {
         [string]$Genre
     )
 
-    $tempFile = Join-Path $File.DirectoryName "$([guid]::NewGuid()).mp3"
-    try {
-        & $Ffmpeg -y -v error -i $File.FullName -map_metadata 0 -metadata "genre=$Genre" -codec copy -- $tempFile
-
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $tempFile)) {
-            throw "ffmpeg failed to rewrite Genre tag for '$($File.FullName)'"
-        }
-
-        # Move-Item -Force не перезаписывает файл, который держит другой
-        # процесс: Winamp с открытым плейлистом даёт невнятное "Cannot
-        # create a file when that file already exists". Говорим об этом
-        # прямо, иначе следующий раз снова искать полчаса.
-        try {
-            Move-Item -LiteralPath $tempFile -Destination $File.FullName `
-                -Force -ErrorAction Stop
-        }
-        catch {
-            throw ("Не удалось заменить '$($File.FullName)': файл занят " +
-                "другим процессом. Закрой Winamp (он держит треки из " +
-                "открытых плейлистов) и повтори. Исходная ошибка: " +
-                $_.Exception.Message)
-        }
+    # $Ffmpeg здесь больше не нужен, но остаётся в сигнатуре: вызывающие
+    # команды передают его, и переписывать их ради одного параметра
+    # незачем.
+    $writer = Join-Path $script:RollRoot 'Tools\write_genre.py'
+    if (-not (Test-Path -LiteralPath $writer)) {
+        throw "Не найден $writer"
     }
-    finally {
-        # Временный файл остаётся после любого провала после ffmpeg, а не
-        # только при его собственной неудаче.
-        if (Test-Path -LiteralPath $tempFile) {
-            Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
-        }
+
+    $output = & python $writer $File.FullName $Genre 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw ("Не удалось записать Genre в '$($File.FullName)': " +
+            ($output -join ' '))
     }
 }

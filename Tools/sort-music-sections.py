@@ -19,6 +19,10 @@ import sys
 import urllib.parse
 from pathlib import Path
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(r"C:\vaults\Рудники Фанделвера")
 UNSORTED_SCENES = ("Ситуации", "Эффекты")
 head = re.compile(r"^(#{1,6})\s+(.*)$")
