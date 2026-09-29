@@ -31,7 +31,7 @@
     there). Ignored if Track is piped in.
 
 .PARAMETER Path
-    CSV file to write. Defaults to track-index.csv in the module root.
+    CSV file to write. Defaults to C:\vaults\Music\Tracks.csv.
     Named Path (not Destination) per the usual PowerShell convention that
     the sole output-file parameter of a cmdlet is called Path (compare
     Export-Csv -Path); Root is the other, differently-purposed path in
@@ -39,7 +39,7 @@
 
 .EXAMPLE
     Export-Track
-    Scans the whole library and writes the default track-index.csv.
+    Scans the whole library and writes the default Tracks.csv.
 .EXAMPLE
     Get-Track -Path "C:\vaults\Music\WH40k" | Export-Track -Path .\wh40k.csv
     Exports just one folder's tracks to a custom file.
@@ -56,7 +56,7 @@ function Export-Track {
         [string]$Root = "C:\vaults\Music",
 
         [Parameter(Position = 0)]
-        [string]$Path = (Join-Path $script:RollRoot 'track-index.csv')
+        [string]$Path = "C:\vaults\Music\Tracks.csv"
     )
 
     begin {

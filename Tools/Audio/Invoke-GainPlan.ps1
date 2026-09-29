@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Applies a loudness plan produced by Tools/gain-plan.py: lossless
+    Applies a loudness plan produced by Tools/Audio/gain-plan.py: lossless
     global_gain edits via mp3rgain, and a list of tracks that need
     re-encoding instead.
 
@@ -12,7 +12,7 @@
 
     Rows marked "reencode" are not handled here: they need the ffmpeg
     loudnorm path. Their paths are written to a JSON file next to the
-    plan so they can be piped straight into Tools/loudnorm.py.
+    plan so they can be piped straight into Tools/Audio/loudnorm.py.
 
     Nothing is decoded or re-compressed: mp3rgain rewrites the
     global_gain field inside the existing frames, so cover art and ID3
@@ -30,9 +30,9 @@
 
 .EXAMPLE
     Import-Module C:\vaults\Roll\Roll.psd1 -Force
-    python C:\vaults\Roll\Tools\loudness.py paths.json measured.json
-    python C:\vaults\Roll\Tools\gain-plan.py measured.json plan.csv
-    C:\vaults\Roll\Tools\Invoke-GainPlan.ps1 -Path plan.csv
+    python C:\vaults\Roll\Tools\Audio\loudness.py paths.json measured.json
+    python C:\vaults\Roll\Tools\Audio\gain-plan.py measured.json plan.csv
+    C:\vaults\Roll\Tools\Audio\Invoke-GainPlan.ps1 -Path plan.csv
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -107,5 +107,5 @@ if ($reencode) {
     $listPath = [IO.Path]::ChangeExtension($Path, '.reencode.json')
     $reencode.Path | ConvertTo-Json -AsArray | Set-Content -LiteralPath $listPath -Encoding UTF8
     Write-Host "требуют перекодирования: $($reencode.Count) -> $listPath"
-    Write-Host "  python C:\vaults\Roll\Tools\loudnorm.py `"$listPath`" report.json --apply"
+    Write-Host "  python C:\vaults\Roll\Tools\Audio\loudnorm.py `"$listPath`" report.json --apply"
 }

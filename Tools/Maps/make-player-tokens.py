@@ -147,7 +147,7 @@ def make_sheet():
         embedded.append(f"{file_id(name)}: [[{name} токен.png]]")
 
     drawing = {
-        "type": "excalidraw", "version": 2, "source": "Roll/Tools/make-player-tokens.py",
+        "type": "excalidraw", "version": 2, "source": "Roll/Tools/Maps/make-player-tokens.py",
         "elements": elements,
         "appState": {
             "theme": "dark", "viewBackgroundColor": "#ffffff",
@@ -177,7 +177,7 @@ tags: [excalidraw]
 токен отсюда, вставляешь в карту, размер менять не надо.
 
 Картинки лежат рядом, в этой же папке. Перерисовать их из портретов и
-пересобрать этот лист: `Roll/Tools/make-player-tokens.py`.
+пересобрать этот лист: `Roll/Tools/Maps/make-player-tokens.py`.
 
 # Excalidraw Data
 

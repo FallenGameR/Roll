@@ -8,7 +8,7 @@
     tagging scheme (e.g. "Background Dread/Secrets Anomaly Modern/SciFi"):
     space-separated groups, optionally with "/"-separated alternatives
     inside a group. Tokens are flattened and bucketed via the known-tag
-    dictionary (Private/Get-GenreTaxonomy.ps1) into:
+    dictionary (Private/Music/Get-GenreTaxonomy.ps1) into:
       - Intensity = energy/pacing (Background/Tension/Combat/Crisis)
       - Emotion   = emotional/narrative tone (Dread/Haven/Hostile/...)
       - Scene     = place + type of content (Depths/Urban/Tavern/Lively/

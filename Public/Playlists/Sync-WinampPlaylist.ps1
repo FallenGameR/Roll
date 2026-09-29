@@ -43,7 +43,7 @@ function Sync-WinampPlaylist {
         [switch] $KeepPlayer
     )
 
-    $script = Join-Path $script:RollRoot 'Tools\sync-from-winamp.py'
+    $script = Join-Path $script:RollRoot 'Tools\Winamp\sync-from-winamp.py'
     if (-not (Test-Path -LiteralPath $script)) {
         throw "Не найден $script"
     }

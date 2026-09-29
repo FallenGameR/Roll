@@ -2,7 +2,7 @@
 .SYNOPSIS
     Rewrites the Genre id3 tag of every mp3 under Path from the legacy
     free-form format into the canonical self-describing
-    "Category:value1,value2" format (see Private/ConvertTo-GenreCategory.ps1),
+    "Category:value1,value2" format (see Private/Music/ConvertTo-GenreCategory.ps1),
     without changing any other tag or re-encoding the audio.
 
 .DESCRIPTION

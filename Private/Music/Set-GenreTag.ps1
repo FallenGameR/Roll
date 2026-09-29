@@ -12,7 +12,7 @@
 
     Оказалось, плеер запрещает не запись в файл, а именно его замену:
     открыть mp3 на запись он даёт. Поэтому правка идёт поверх
-    существующего ID3-блока, через Tools\write_genre.py. Отсюда же
+    существующего ID3-блока, через Tools\Music\write_genre.py. Отсюда же
     следует, что закрывать Winamp перед тегированием больше не нужно.
 
     Общая точка для Update-MusicGenreTag (массовый перевод формата) и
@@ -34,7 +34,7 @@ function Set-GenreTag {
     # $Ffmpeg здесь больше не нужен, но остаётся в сигнатуре: вызывающие
     # команды передают его, и переписывать их ради одного параметра
     # незачем.
-    $writer = Join-Path $script:RollRoot 'Tools\write_genre.py'
+    $writer = Join-Path $script:RollRoot 'Tools\Music\write_genre.py'
     if (-not (Test-Path -LiteralPath $writer)) {
         throw "Не найден $writer"
     }

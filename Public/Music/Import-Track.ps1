@@ -21,12 +21,12 @@
     like for near-instant repeated queries.
 
 .PARAMETER Path
-    CSV file to read. Defaults to track-index.csv in the module root
+    CSV file to read. Defaults to C:\vaults\Music\Tracks.csv
     (the same default Export-Track writes to).
 
 .EXAMPLE
     Import-Track
-    Loads the default track-index.csv.
+    Loads the default Tracks.csv.
 .EXAMPLE
     Import-Track | Where-Object { $_.Game -contains 'Fantasy' -and $_.Intensity -contains 'Combat' }
     Fast, offline filtering without touching the mp3 files at all.
@@ -38,7 +38,7 @@ function Import-Track {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)]
-        [string]$Path = (Join-Path $script:RollRoot 'track-index.csv')
+        [string]$Path = "C:\vaults\Music\Tracks.csv"
     )
 
     $ErrorActionPreference = "Stop"

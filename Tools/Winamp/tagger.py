@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import winamp_now  # noqa: E402
 
 ROLL = r"C:\vaults\Roll"
-TAXONOMY = os.path.join(ROLL, "Private", "Get-GenreTaxonomy.ps1")
+TAXONOMY = os.path.join(ROLL, "Private", "Music", "Get-GenreTaxonomy.ps1")
 FFPROBE = os.environ.get("FFPROBE", "ffprobe")
 MARKER = "<<<roll-tagger-done>>>"
 
@@ -219,7 +219,7 @@ def db_ratings():
     try:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
-            "winamp_ratings", os.path.join(ROLL, "Tools", "read-winamp-ratings.py"))
+            "winamp_ratings", os.path.join(ROLL, "Tools", "Winamp", "read-winamp-ratings.py"))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _db_ratings["map"] = {k.lower(): v for k, v in module.read_ratings().items()}

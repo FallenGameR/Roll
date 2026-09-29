@@ -16,11 +16,13 @@ if ([Console]::OutputEncoding.CodePage -ne 65001) {
     try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 }
 
-# Private helpers first (not exported), then public functions.
-Get-ChildItem -Path "$PSScriptRoot\Private\*.ps1" -ErrorAction SilentlyContinue |
+# Private helpers first (not exported), then public functions. Оба дерева
+# разложены по темам (Music, Playlists, Images, Dice), поэтому обход
+# рекурсивный: новый подраздел подхватывается без правки манифеста.
+Get-ChildItem -Path "$PSScriptRoot\Private" -Filter '*.ps1' -Recurse -ErrorAction SilentlyContinue |
     ForEach-Object { . $_.FullName }
 
-Get-ChildItem -Path "$PSScriptRoot\Public\*.ps1" -ErrorAction SilentlyContinue |
+Get-ChildItem -Path "$PSScriptRoot\Public" -Filter '*.ps1' -Recurse -ErrorAction SilentlyContinue |
     ForEach-Object { . $_.FullName }
 
 Export-ModuleMember -Function * -Alias *

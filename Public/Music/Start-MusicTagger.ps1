@@ -35,7 +35,7 @@ function Start-MusicTagger {
 
     $ErrorActionPreference = 'Stop'
 
-    $script = Join-Path $script:RollRoot 'Tools\tagger.py'
+    $script = Join-Path $script:RollRoot 'Tools\Winamp\tagger.py'
     if (-not (Test-Path -LiteralPath $script)) {
         throw "Не найден $script"
     }
