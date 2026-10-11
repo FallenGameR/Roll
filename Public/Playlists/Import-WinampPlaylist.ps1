@@ -133,10 +133,14 @@ function Import-WinampPlaylist {
                 seconds  = [int] $seconds
             }
 
+            # Формат hh:mm:ss молча теряет сутки, а сводный плейлист по тегу
+            # легко перешагивает 24 часа: часы считаем полным числом.
+            $span = [timespan]::FromSeconds([int]$seconds)
+
             [pscustomobject] @{
                 Плейлист   = $title
                 Треков     = $tracks.Count
-                Длительность = [timespan]::FromSeconds([int]$seconds).ToString('hh\:mm\:ss')
+                Длительность = '{0:d2}:{1:mm\:ss}' -f [int][math]::Floor($span.TotalHours), $span
                 Обновлён   = [bool] $known
             }
         }
