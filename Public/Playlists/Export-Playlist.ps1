@@ -10,6 +10,10 @@
     или Музыка, сценой считается вложенный заголовок, треком - любая
     ссылка на локальный файл.
 
+    Темы NPC берутся из свойства `music` карточек в Adventure\NPC, чей
+    `location` ведёт на эту страницу: каждая едет отдельным списком
+    `<Локация> - НПС - <Имя>`.
+
 .PARAMETER Path
     Файл кампании с разделом музыки.
 
@@ -40,6 +44,13 @@ function Export-Playlist {
 
     $ErrorActionPreference = 'Stop'
     $full = (Resolve-Path -LiteralPath $Path).Path
+
+    # Отыгранная локация лежит в Done, и её музыка в плеере уже не нужна.
+    if ($full -match '\\Done\\') {
+        Write-Warning "Страница в Done, в плеер не выгружается: $full"
+        return
+    }
+
     $lines = [System.IO.File]::ReadAllLines($full)
 
     # Имя в дереве плеера: свойство `fn` из шапки, иначе имя файла.
@@ -86,7 +97,35 @@ function Export-Playlist {
         }
     }
 
-    if (-not $scenes.Count) {
+    # Темы NPC живут в шапках их карточек (`music`), а не в разделе
+    # локации. В плеер они едут вместе с локацией, куда указывает
+    # `location` карточки, отдельным списком на персонажа.
+    $npcs = [ordered] @{}
+    $root = Split-Path $full -Parent
+    while ($root -and -not (Test-Path -LiteralPath (Join-Path $root 'Adventure\NPC'))) {
+        $root = Split-Path $root -Parent
+    }
+    if ($root) {
+        $page = [System.IO.Path]::GetFileNameWithoutExtension($full)
+        foreach ($card in Get-ChildItem -LiteralPath (Join-Path $root 'Adventure\NPC') -Filter '*.md') {
+            $front = Get-FrontMatterValue -Path $card.FullName -Key 'location', 'music'
+            $here = $front['location'] | Where-Object {
+                $_ -match '\[\[([^\]|#]+)' -and $Matches[1].Trim() -eq $page
+            }
+            if (-not $here) { continue }
+            $tracks = foreach ($value in $front['music']) {
+                foreach ($match in [regex]::Matches($value, '\(file:///([^)]+)\)')) {
+                    [uri]::UnescapeDataString($match.Groups[1].Value) -replace '/', '\'
+                }
+            }
+            if ($tracks) {
+                # Имя до запятой: "Незнар, Чёрный Паук" в дереве плеера длинно.
+                $npcs[($card.BaseName -split ',')[0].Trim()] = @($tracks)
+            }
+        }
+    }
+
+    if (-not $scenes.Count -and -not $npcs.Count) {
         Write-Warning "В файле не нашлось раздела музыки: $full"
         return
     }
@@ -104,7 +143,9 @@ function Export-Playlist {
         if ($key -eq 'Ситуации' -or $key -eq 'Эффекты') {
             for ($i = 0; $i -lt $scenes[$key].Count; $i++) {
                 $label = $labels[$key][$i]
-                $kind = if ($key -eq 'Ситуации') { 'Ситуация' } else { 'Эффект' }
+                $kind = if ($key -eq 'Ситуации') { 'Ситуация' }
+                        elseif ($label.Background) { 'Фон' }
+                        else { 'Эффект' }
                 $title = "$name - $kind - $($label.Text)"
                 Write-PlaylistFile -Title $title -Tracks @($scenes[$key][$i]) `
                     -Destination $Destination
@@ -115,5 +156,12 @@ function Export-Playlist {
         $title = if ($key) { "$name - $key" } else { $name }
         Write-PlaylistFile -Title $title -Tracks $scenes[$key] `
             -Destination $Destination
+    }
+
+    if (-not $Scene -or 'НПС' -in $Scene) {
+        foreach ($npc in $npcs.Keys) {
+            Write-PlaylistFile -Title "$name - НПС - $npc" -Tracks $npcs[$npc] `
+                -Destination $Destination
+        }
     }
 }

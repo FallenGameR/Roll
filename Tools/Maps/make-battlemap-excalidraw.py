@@ -122,7 +122,7 @@ def zoommap_blocks(page: Path):
     """Все блоки zoommap страницы: отступ каллаута, номер строки, карта, название.
 
     Название берётся из `name` внутри блока: так подписаны этажи трактира.
-    Без него лист называется по странице локации. Суффикс ` - бой` к названию
+    Без него лист называется по странице локации. Приставку `Battlemap - `
     дописывает вызывающий: имя листа обязано отличаться от имени страницы.
     """
     lines = read_text(page).split("\n")
@@ -447,7 +447,9 @@ def add_links(page: Path, wanted) -> int:
 
 
 def main() -> None:
-    for page in sorted(LOCATIONS.glob("*.md")):
+    # Локации разложены по папкам частей сюжета; отыгранные в Done не трогаем.
+    pages = [p for p in LOCATIONS.rglob("*.md") if "Done" not in p.parts]
+    for page in sorted(pages, key=lambda p: p.stem):
         blocks = zoommap_blocks(page)
         if not blocks:
             print(f"{page.stem}: нет блока zoommap — пропуск")
@@ -458,7 +460,7 @@ def main() -> None:
             if image_name not in GRID_PITCH:
                 print(f"  {image_name}: сетка не измерена — пропуск")
                 continue
-            sheet = f"{title} - бой"
+            sheet = f"Battlemap - {title}"
             build_sheet(sheet, image_name)
             wanted.append((pre, idx, sheet))
         added = add_links(page, wanted)

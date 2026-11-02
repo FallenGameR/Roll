@@ -35,7 +35,7 @@ PLAYERS = os.path.join(VAULT, "Adventure", "Players")
 # размер токена на карте, тот же, что в make-player-tokens.py
 W, H = 38.52975918257891, 39.312
 DEFAULT_MAP = os.path.join(
-    VAULT, "_img", "maps", "battles", "Засада гоблинов - бой.excalidraw.md")
+    VAULT, "_img", "maps", "battles", "Battlemap - Засада гоблинов.excalidraw.md")
 
 
 def party_order():

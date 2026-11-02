@@ -51,6 +51,8 @@ CATALOG = Path(os.environ["APPDATA"]) / r"Winamp\Plugins\ml\playlists"
 
 head = re.compile(r"^(#{1,6})\s+(.*)$")
 track = re.compile(r"\[([^\]]*)\]\(file:///([^)]+)\)")
+# Сцена-псевдоним для `music` из шапки карточки NPC.
+NPC_SCENE = "\x00npc"
 
 
 def to_path(url):
@@ -119,6 +121,20 @@ def scan_markdown():
         scene = ""
         scenes = {}
         header_lines = {}
+        # Тема NPC живёт в шапке (`music`), а не в разделе: её тоже надо
+        # видеть, иначе переезд трека из Unsorted оставит ссылку сиротой.
+        if lines and lines[0].strip() == "---":
+            in_key = False
+            for i, line in enumerate(lines[1:], start=1):
+                if line.strip() == "---":
+                    break
+                if re.match(r"^\S[^:]*:", line):
+                    in_key = line.startswith("music:")
+                if in_key:
+                    t = track.search(line)
+                    if t:
+                        scenes.setdefault(NPC_SCENE, []).append(
+                            (i, to_path(t.group(2))))
         for i, line in enumerate(lines):
             m = head.match(line)
             if m:
@@ -508,15 +524,41 @@ def main():
     skipped = []
     removed = 0
     for md, data in files.items():
+        if "Done" in md.parts:
+            # Отыгранные локации в плеер не выгружаются, поэтому отсутствие
+            # их списков в каталоге не значит, что Мастер их удалил.
+            continue
         drop = set()
+        # Ситуации и эффекты живут каждый в своём списке из одного трека.
+        # Удалён ли такой список, решаем по спискам этой же страницы, а не
+        # по всему плееру: трек, переложенный Мастером в Бой, жив в каталоге,
+        # но ситуация под него при этом удалена.
+        base = playlist_base_name(md)
+        local_single = set()
+        base_in_player = False
+        for name, tracks in catalog.items():
+            if name.startswith(f"{base} - "):
+                base_in_player = True
+            if (name.startswith(f"{base} - Ситуация")
+                    or name.startswith(f"{base} - Эффект")
+                    or name.startswith(f"{base} - Фон")):
+                local_single.update(t.lower() for t in tracks)
         for scene, items in data["scenes"].items():
+            if scene == NPC_SCENE:
+                # Список NPC собирается из карточки, а не из раздела
+                # локации, и строк на странице за ним не стоит.
+                continue
             title = playlist_title(md, scene)
             if title is None:
                 # Ситуации и эффекты: плейлист на трек, ищем по пути.
                 # Трек, которого плеер не знает и который туда никогда
-                # не выгружался, - не удалённый, а новый.
+                # не выгружался, - не удалённый, а новый. Страница, которой
+                # под нынешним именем в плеере нет вовсе (переименовали и ещё
+                # не выгрузили), не трогается: её списки висят под старым.
+                if not base_in_player:
+                    continue
                 for index, path in items:
-                    if (path.lower() not in alive
+                    if (path.lower() not in local_single
                             and path.lower() in exported_paths):
                         drop.add(index)
                 continue
