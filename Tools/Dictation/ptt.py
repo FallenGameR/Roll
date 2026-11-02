@@ -66,6 +66,8 @@ def disable_power_throttling():
     state = State(1, execution_speed, 0)
     kernel32 = ctypes.windll.kernel32
     kernel32.GetCurrentProcess.restype = w.HANDLE
+    kernel32.SetProcessInformation.argtypes = [w.HANDLE, ctypes.c_int, ctypes.c_void_p, w.DWORD]
+    kernel32.SetProcessInformation.restype = w.BOOL
     ok = kernel32.SetProcessInformation(kernel32.GetCurrentProcess(), 4,  # ProcessPowerThrottling
                                         ctypes.byref(state), ctypes.sizeof(state))
     log.info("Power throttling %s", "disabled" if ok else "left as is")
