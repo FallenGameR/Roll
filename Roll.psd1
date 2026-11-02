@@ -25,7 +25,11 @@
         'Start-WinampPlaylist',
         'Get-PngPrompt',
         'Get-ExeIcon',
-        'Invoke-DiceRoll'
+        'Invoke-DiceRoll',
+        'Install-Dictation',
+        'Start-Dictation',
+        'Stop-Dictation',
+        'Get-Dictation'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()
