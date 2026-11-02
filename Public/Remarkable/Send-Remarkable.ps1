@@ -18,9 +18,10 @@
     Файлы для загрузки. Принимает конвейер, в том числе из Get-ChildItem.
 
 .PARAMETER Collection
-    Папка на планшете: имя (как в Get-RemarkableCollection) или id. Если
-    папок с таким именем несколько, команда остановится и попросит id.
-    Без параметра файлы ложатся в корень.
+    Папка на планшете: полный путь через "/" (как Path в
+    Get-RemarkableCollection), короткое имя или id. Если коротких имён
+    несколько, команда остановится и перечислит пути. Без параметра
+    файлы ложатся в корень.
 
 .EXAMPLE
     Send-Remarkable '.\Раздатка приёмов.pdf'
@@ -43,16 +44,17 @@ function Send-Remarkable {
         $collectionId = $null
         if ($Collection) {
             $all = @(Get-RemarkableCollection)
-            $match = @($all | Where-Object { $_.Id -eq $Collection })
+            $match = @($all | Where-Object { $_.Id -eq $Collection -or $_.Path -eq $Collection })
             if (-not $match) { $match = @($all | Where-Object { $_.Name -eq $Collection }) }
             if ($match.Count -eq 0) {
                 throw "На планшете нет папки '$Collection'. Список: Get-RemarkableCollection."
             }
             if ($match.Count -gt 1) {
-                $ids = ($match | ForEach-Object { "$($_.Id) ($($_.Modified))" }) -join ', '
-                throw "Папок '$Collection' несколько, укажи id: $ids"
+                $paths = ($match | ForEach-Object Path) -join ', '
+                throw "Папок '$Collection' несколько, укажи полный путь: $paths"
             }
             $collectionId = $match[0].Id
+            $Collection = $match[0].Path
         }
         $target = if ($collectionId) { "папку '$Collection'" } else { 'корень' }
     }

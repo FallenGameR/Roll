@@ -9,12 +9,12 @@
     (RCU.exe, см. Open-Remarkable). Ключ --cli прячет окно и лог.
 
     Без связи CLI ждёт секунд восемь, пишет "connection unsuccessful" и
-    выходит с кодом 1. Это превращается в исключение с подсказкой, что
-    делать, а не в пустой список.
+    выходит с кодом 1. Поэтому сначала проверяется порт по адресу
+    активного пресета: спящий планшет отсекается за две секунды.
 
-    RCU собран из Python, поэтому PYTHONIOENCODING=utf-8 заставляет его
-    печатать имена документов в UTF-8, а Invoke-WithUtf8Console читает
-    их без кракозябр.
+    Печатает RCU в трубу в cp1252 и падает на кириллице, а переменные
+    PYTHONIOENCODING и PYTHONUTF8 собранный exe игнорирует. Поэтому
+    списки идут не через него, а по SSH (Invoke-RemarkableSsh).
 
     Путь к RCU-CLI.exe можно переопределить переменной окружения
     RCU_CLI, по умолчанию C:\tools\RCU\RCU-CLI.exe.
@@ -29,18 +29,14 @@ function Invoke-RemarkableCli {
     if (-not (Test-Path -LiteralPath $exe)) {
         throw "Не найден RCU-CLI: $exe. Укажи путь в `$env:RCU_CLI."
     }
+    $preset = Get-ActiveRemarkablePreset
+    if ($preset -and -not (Test-RemarkablePort $preset.host)) {
+        throw "Remarkable не отвечает по $($preset.host). Разбуди планшет и проверь, " +
+              'что он в той же сети Wi-Fi.'
+    }
 
-    $previousIo = $env:PYTHONIOENCODING
-    $env:PYTHONIOENCODING = 'utf-8'
-    try {
-        $output = @(Invoke-WithUtf8Console {
-            & $exe --autoconnect --cli @Arguments 2>&1 | ForEach-Object { "$_" }
-        })
-        $exitCode = $LASTEXITCODE
-    }
-    finally {
-        $env:PYTHONIOENCODING = $previousIo
-    }
+    $output = @(& $exe --autoconnect --cli @Arguments 2>&1 | ForEach-Object { "$_" })
+    $exitCode = $LASTEXITCODE
 
     if ($output -match 'connection unsuccessful') {
         throw 'Remarkable не отвечает. Разбуди планшет и проверь, что он в той ' +

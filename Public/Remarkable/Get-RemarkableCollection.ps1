@@ -1,36 +1,37 @@
 <#
 .SYNOPSIS
-    Список папок (collections) на Remarkable.
+    Список папок на Remarkable с полными путями.
 
 .DESCRIPTION
-    Обёртка над `RCU-CLI --list-collections`. Id нужен для загрузки в
-    конкретную папку; Send-Remarkable умеет искать папку и по имени.
+    Читает метаданные планшета по SSH (см. Get-RemarkableConnection).
+    Path - полный путь через "/", по нему Send-Remarkable находит папку,
+    даже если коротких имён одинаковых несколько. Папки в корзине
+    скрыты, их показывает -IncludeTrash.
 
 .PARAMETER Name
-    Фильтр по имени папки, поддерживает подстановочные знаки.
+    Фильтр по имени или по полному пути, поддерживает подстановочные знаки.
+
+.PARAMETER IncludeTrash
+    Показать и папки из корзины.
 
 .EXAMPLE
     Get-RemarkableCollection
 
 .EXAMPLE
-    Get-RemarkableCollection 'Фанд*'
+    Get-RemarkableCollection 'Projects/*'
 #>
 function Get-RemarkableCollection {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)]
-        [string]$Name = '*'
+        [string]$Name = '*',
+
+        [switch]$IncludeTrash
     )
 
-    Invoke-RemarkableCli '--list-collections' |
-        Where-Object { $_ -match "`t" } |
-        ForEach-Object {
-            $field = $_ -split "`t"
-            [pscustomobject]@{
-                Id       = $field[0]
-                Name     = $field[1]
-                Modified = $field[2]
-            }
-        } |
-        Where-Object { $_.Name -like $Name }
+    Get-RemarkableItem |
+        Where-Object { $_.Folder -and ($IncludeTrash -or -not $_.Trashed) } |
+        Where-Object { $_.Name -like $Name -or $_.Path -like $Name } |
+        Sort-Object Path |
+        Select-Object Path, Name, Modified, Id
 }
