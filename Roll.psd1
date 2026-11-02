@@ -6,7 +6,8 @@
     Author             = 'FallenGameR'
     Description        = 'Tabletop RPG vault toolkit: music library and ' +
                           'Winamp playlists, voice dictation, dice rolls, ' +
-                          'PNG prompts and icons, Copilot control panel. ' +
+                          'PNG prompts and icons, Copilot control panel, ' +
+                          'file transfer to reMarkable via RCU. ' +
                           'Standalone scripts for maps, players, audio and ' +
                           'vault checks live in Tools.'
     PowerShellVersion  = '5.1'
@@ -32,7 +33,11 @@
         'Start-Dictation',
         'Stop-Dictation',
         'Get-Dictation',
-        'Install-RollPanel'
+        'Install-RollPanel',
+        'Send-Remarkable',
+        'Get-RemarkableDocument',
+        'Get-RemarkableCollection',
+        'Open-Remarkable'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()

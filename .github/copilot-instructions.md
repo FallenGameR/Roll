@@ -32,7 +32,7 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
   JS, которые запускают руками или из скилла. Модуль их не импортирует.
 
 Темы сейчас такие: `Music`, `Playlists`, `Winamp`, `Audio`, `Dictation`,
-`Dice`, `Images`, `Maps`, `Players`, `Vault`, `Panel`. Новую тему
+`Dice`, `Images`, `Maps`, `Players`, `Vault`, `Panel`, `Remarkable`. Новую тему
 заводят, только если код не ложится ни в одну из них; одна и та же тема
 в `Public`, `Private` и `Tools` называется одинаково.
 
@@ -46,6 +46,27 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
 запускают повторно, не глядя в код, и ничего не зовут из скиллов.
 Разовый скрипт пишут сразу сюда; если он оказался нужен второй раз,
 его переносят в тему и прописывают в скилле.
+
+## Remarkable
+
+Файлы на планшет переносит RCU из `C:\tools\RCU`. Инструкция к нему -
+`User Manual.pdf` там же, команды CLI в главе 4. Модуль ходит только
+через `RCU-CLI.exe --autoconnect --cli`, который подключается по
+последнему пресету, сохранённому в окне RCU. Отсюда разделение:
+
+- спаривание, смена сети и адреса - руками в окне, `Open-Remarkable`;
+  шаги расписаны в его справке (`Get-Help Open-Remarkable -Full`);
+- загрузка - `Send-Remarkable`, списки - `Get-RemarkableDocument` и
+  `Get-RemarkableCollection`.
+
+Без связи CLI за восемь секунд выходит с `connection unsuccessful`;
+обычно это значит, что планшет спит. Повторная загрузка того же файла
+создаёт на планшете второй документ, а не заменяет первый, поэтому
+перед заливкой пачки стоит глянуть `Get-RemarkableDocument`.
+
+`%APPDATA%\davisr\rcu.ini` хранит пароль SSH открытым текстом внутри
+JSON пресетов. Файл не выводить целиком и не копировать: маска по
+строкам `password=` его не ловит.
 
 ## Как добавить команду
 

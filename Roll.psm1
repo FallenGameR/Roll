@@ -17,7 +17,7 @@ if ([Console]::OutputEncoding.CodePage -ne 65001) {
 }
 
 # Private helpers first (not exported), then public functions. Оба дерева
-# разложены по темам (Music, Playlists, Dictation, Images, Dice, Panel), поэтому обход
+# разложены по темам (Music, Playlists, Dictation, Images, Dice, Panel, Remarkable), поэтому обход
 # рекурсивный: новый подраздел подхватывается сам. Экспорт решает манифест:
 # новую публичную функцию надо дописать в FunctionsToExport в Roll.psd1.
 Get-ChildItem -Path "$PSScriptRoot\Private" -Filter '*.ps1' -Recurse -ErrorAction SilentlyContinue |
