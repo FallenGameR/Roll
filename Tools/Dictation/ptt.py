@@ -62,6 +62,14 @@ commands = queue.Queue()
 held = {"key": None, "cancelled": False}
 
 
+MEDIA = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Media")
+
+
+def chime(name):
+    # Windows Speech Recognition sounds; async so recording isn't delayed.
+    winsound.PlaySound(os.path.join(MEDIA, name), winsound.SND_FILENAME | winsound.SND_ASYNC)
+
+
 def recorder():
     while True:
         cmd = commands.get()
@@ -73,7 +81,7 @@ def recorder():
                                 callback=lambda data, *_: chunks.append(data.copy()))
         stream.start()
         log.info("Recording...")
-        winsound.Beep(900, 60)
+        chime("Speech On.wav")
         while commands.get() != "stop":
             pass
         stream.stop()
@@ -82,7 +90,7 @@ def recorder():
         if held["cancelled"] or duration < MIN_SECONDS or not chunks:
             log.info("Skipped (cancelled=%s, %.1fs)", held["cancelled"], duration)
             continue
-        winsound.Beep(600, 60)
+        chime("Speech Off.wav")
         transcribe(np.concatenate(chunks).flatten())
 
 
