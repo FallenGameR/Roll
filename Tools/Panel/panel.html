@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пульт Roll</title>
+<style>
+  body {
+    margin: 0;
+    padding: 16px;
+    background: var(--background-color-default, #fff);
+    color: var(--text-color-default, #1f2328);
+    font-family: var(--font-sans, "Segoe UI", sans-serif);
+    font-size: var(--text-body-medium, 14px);
+    line-height: var(--leading-body-medium, 20px);
+  }
+  section {
+    border: 1px solid var(--border-color-default, #d0d7de);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: var(--text-title-small, 16px);
+    font-weight: var(--font-weight-semibold, 600);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-color-muted, #888); flex: none; }
+  .dot.on { background: var(--true-color-green, #2da44e); box-shadow: 0 0 6px var(--true-color-green, #2da44e); }
+  .state { color: var(--text-color-muted, #666); font-weight: normal; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button {
+    font: inherit;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color-default, #d0d7de);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--color-focus-outline, #0969da); }
+  button:disabled { opacity: .45; cursor: default; }
+  a { color: var(--true-color-blue, #0969da); cursor: pointer; text-decoration: underline; }
+  .links { margin-left: 8px; display: flex; gap: 12px; }
+  .phrase { margin-top: 10px; color: var(--text-color-muted, #666); font-size: 13px; }
+  .error { color: var(--true-color-red, #cf222e); margin-top: 8px; font-size: 13px; }
+  .log { margin-top: 10px; max-height: 360px; overflow: auto; border-top: 1px solid var(--border-color-default, #d0d7de); }
+  .log-item { display: flex; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--border-color-default, #d0d7de); cursor: pointer; }
+  .log-item:hover { background: var(--bb-11-10, rgba(127,127,127,.08)); }
+  .log-time { color: var(--text-color-muted, #666); font-size: 12px; flex: none; width: 74px; }
+  .log-text { user-select: text; white-space: pre-wrap; }
+  .log-item.copied .log-time::after { content: " ✓"; color: var(--true-color-green, #2da44e); }
+  input {
+    font: inherit;
+    font-family: var(--font-mono, Consolas, monospace);
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color-default, #d0d7de);
+    background: transparent;
+    color: inherit;
+  }
+  input:focus { outline: 2px solid var(--color-focus-outline, #0969da); outline-offset: -1px; }
+  pre {
+    font-family: var(--font-mono, Consolas, monospace);
+    font-size: 13px;
+    margin: 10px 0 0;
+    white-space: pre-wrap;
+    max-height: 320px;
+    overflow: auto;
+  }
+  .cmd { color: var(--text-color-muted, #666); }
+  .c90 { color: var(--text-color-muted, #888); }
+  .c31 { color: var(--true-color-red, #cf222e); }
+  .c32 { color: var(--true-color-green, #2da44e); }
+  .c93 { color: var(--true-color-yellow, #bf8700); font-weight: 600; }
+</style>
+</head>
+<body>
+<section>
+  <h2><span class="dot" id="w-dot"></span>Плейлист Winamp <span class="state" id="w-state">...</span></h2>
+  <div class="row">
+    <button id="w-start">Запустить</button>
+    <button id="w-stop">Остановить</button>
+    <span class="links" id="w-links" hidden>
+      <a id="w-browser">в браузере</a>
+      <a id="w-here">во вкладке приложения</a>
+    </span>
+  </div>
+</section>
+<section>
+  <h2>Кубики</h2>
+  <div class="row">
+    <input id="r-text" placeholder="2d6+3, 2xd20 vs 15, 6x d20 + 6 adv" autocomplete="off" spellcheck="false">
+  </div>
+  <pre id="r-out"></pre>
+</section>
+<section>
+  <h2><span class="dot" id="d-dot"></span>Диктовка <span class="state" id="d-state">...</span></h2>
+  <div class="row">
+    <button id="d-start">Запустить</button>
+    <button id="d-stop">Остановить</button>
+    <button id="d-clear">Очистить историю</button>
+  </div>
+  <div class="phrase">Щелчок по фразе копирует её.</div>
+  <div class="log" id="d-log"></div>
+</section>
+<div class="error" id="error"></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let busy = false;
+  let winampUrl = "";
+  let lastPhrase = null;
+
+  function render(s) {
+    $("d-dot").classList.toggle("on", s.dictation);
+    $("d-state").textContent = s.dictation ? "работает, держите кнопку Copilot" : "остановлена";
+    $("d-start").disabled = busy || s.dictation;
+    $("d-stop").disabled = busy || !s.dictation;
+    if (s.lastPhrase !== lastPhrase) { lastPhrase = s.lastPhrase; loadLog(); }
+
+    winampUrl = s.winampUrl;
+    $("w-dot").classList.toggle("on", s.winamp);
+    $("w-state").textContent = s.winamp ? "страница поднята" : "остановлена";
+    $("w-start").disabled = busy || s.winamp;
+    $("w-stop").disabled = busy || !s.winamp;
+    $("w-links").hidden = !s.winamp;
+  }
+
+  async function post(path, body) {
+    const res = await fetch(path, { method: "POST", body: JSON.stringify(body ?? {}) });
+    const data = await res.json();
+    if (data.error && !res.ok) throw new Error(data.error);
+    return data;
+  }
+
+  async function call(path, label) {
+    busy = true;
+    $("error").textContent = "";
+    $(label).textContent = "минутку...";
+    document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      const data = await post(path);
+      busy = false;
+      render(data);
+    } catch (e) {
+      $("error").textContent = e.message;
+    } finally {
+      busy = false;
+      refresh();
+    }
+  }
+
+  async function refresh() {
+    if (busy) return;
+    try {
+      const res = await fetch("/api/status", { method: "POST" });
+      if (res.ok && !busy) render(await res.json());
+    } catch { /* расширение перезапускается */ }
+  }
+
+  async function loadLog() {
+    try {
+      const items = await post("/api/dictation/log");
+      const log = $("d-log");
+      log.replaceChildren(...items.map((p) => {
+        const row = document.createElement("div");
+        row.className = "log-item";
+        row.title = "Скопировать";
+        const time = document.createElement("span");
+        time.className = "log-time";
+        time.textContent = p.time;
+        time.title = p.date;
+        const text = document.createElement("span");
+        text.className = "log-text";
+        text.textContent = p.text;
+        row.append(time, text);
+        row.onclick = () => copy(p.text, row);
+        return row;
+      }));
+    } catch { /* обновится на следующем опросе */ }
+  }
+
+  async function copy(text, row) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    row.classList.add("copied");
+    setTimeout(() => row.classList.remove("copied"), 1200);
+  }
+
+  $("d-start").onclick = () => call("/api/dictation/start", "d-state");
+  $("d-stop").onclick = () => call("/api/dictation/stop", "d-state");
+  $("d-clear").onclick = async () => {
+    try { await post("/api/dictation/clear"); lastPhrase = null; loadLog(); }
+    catch (e) { $("error").textContent = e.message; }
+  };
+  $("w-start").onclick = () => call("/api/winamp/start", "w-state");
+  $("w-stop").onclick = () => call("/api/winamp/stop", "w-state");
+  $("w-browser").onclick = () => post("/api/winamp/open").catch((e) => ($("error").textContent = e.message));
+  $("w-here").onclick = () => post("/api/winamp/tab").catch((e) => ($("error").textContent = e.message));
+
+  // ANSI-цвета из roll превращаются в классы c31, c32, c90, c93.
+  function ansi(text) {
+    const esc = (t) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+    return esc(text).replace(/\x1b\[(\d+)m([\s\S]*?)\x1b\[0m/g, '<span class="c$1">$2</span>')
+      .replace(/\x1b\[[0-9;]*m/g, "");
+  }
+
+  const history = [];
+  let cursor = 0;
+  $("r-text").addEventListener("keydown", async (e) => {
+    if (e.key === "ArrowUp" && cursor > 0) { $("r-text").value = history[--cursor]; e.preventDefault(); return; }
+    if (e.key === "ArrowDown" && cursor < history.length) { $("r-text").value = history[++cursor] ?? ""; e.preventDefault(); return; }
+    if (e.key !== "Enter") return;
+    const text = $("r-text").value.trim();
+    if (!text) return;
+    history.push(text);
+    cursor = history.length;
+    $("r-text").value = "";
+    try {
+      const r = await post("/api/roll", { text });
+      const body = r.error ? `<span class="c31">${ansi(r.error)}</span>` : ansi(r.output);
+      $("r-out").innerHTML = `<span class="cmd">&gt; ${ansi(text)}</span>\n${body}\n\n` + $("r-out").innerHTML;
+    } catch (err) {
+      $("error").textContent = err.message;
+    }
+  });
+
+  refresh();
+  setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+</script>
+</body>
+</html>
