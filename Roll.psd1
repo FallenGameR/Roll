@@ -37,7 +37,9 @@
         'Send-Remarkable',
         'Get-RemarkableDocument',
         'Get-RemarkableCollection',
-        'Open-Remarkable'
+        'Open-Remarkable',
+        'Get-RemarkableConnection',
+        'Set-RemarkableConnection'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()
