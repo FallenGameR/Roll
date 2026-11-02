@@ -43,8 +43,10 @@ function Invoke-RemarkableCli {
               'же сети Wi-Fi или подключён кабелем; адрес и пароль - в пресете ' +
               'RCU (Open-Remarkable).'
     }
-    if ($exitCode -ne 0) {
-        throw "RCU-CLI завершился с кодом ${exitCode}:`n$($output -join "`n")"
+    # Код выхода не показатель: RCU 5.1 возвращает 1 и после удачной
+    # загрузки. Падение видно по трейсбеку.
+    if ($output -match '^Traceback') {
+        throw "RCU-CLI упал (код $exitCode):`n$($output -join "`n")"
     }
     $output
 }

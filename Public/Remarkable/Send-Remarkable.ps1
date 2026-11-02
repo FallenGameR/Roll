@@ -5,14 +5,16 @@
 .DESCRIPTION
     Обёртка над `RCU-CLI --upload-doc` и `--upload-doc-to`. Каждый файл
     грузится отдельным вызовом, и каждый вызов заново подключается к
-    планшету, так что пачка идёт по несколько секунд на файл.
+    планшету, так что пачка идёт секунд по десять на файл. Код выхода
+    RCU врёт, поэтому в конце команда сверяет по SSH, что все файлы
+    действительно появились в нужной папке.
 
     Планшет принимает PDF, EPUB, RMN, RMDOC, RM, TXT и MD. Markdown RCU
     переводит в родной текстовый документ Remarkable с разметкой.
     Загрузка RMN всегда создаёт копию с новым id, а не заменяет старый
     документ; то же с повторной загрузкой PDF - на планшете будет два.
 
-    Подключение берётся из последнего пресета RCU (см. Open-Remarkable).
+    Подключение берётся из активного пресета RCU (Get-RemarkableConnection).
 
 .PARAMETER Path
     Файлы для загрузки. Принимает конвейер, в том числе из Get-ChildItem.
@@ -57,6 +59,8 @@ function Send-Remarkable {
             $Collection = $match[0].Path
         }
         $target = if ($collectionId) { "папку '$Collection'" } else { 'корень' }
+        $sent = [Collections.Generic.List[string]]::new()
+        $started = (Get-Date).AddMinutes(-1)
     }
 
     process {
@@ -80,7 +84,22 @@ function Send-Remarkable {
                 '--upload-doc', $file.FullName
             }
             Invoke-RemarkableCli $arguments | Out-Null
-            Write-Host "Загружено: $($file.Name) -> $target"
+            $sent.Add($file.BaseName)
+            Write-Host "Отправлено: $($file.Name) -> $target"
+        }
+    }
+
+    end {
+        if (-not $sent.Count) { return }
+        $parent = if ($collectionId) { $Collection } else { '' }
+        $arrived = @(Get-RemarkableDocument | Where-Object {
+            $_.Parent -eq $parent -and $_.Modified -ge $started
+        } | ForEach-Object Name)
+        $missing = @($sent | Where-Object { $_ -notin $arrived })
+        if ($missing) {
+            Write-Error "На планшете не появились: $($missing -join ', ')"
+        } else {
+            Write-Host "Проверено на планшете: $($sent.Count) шт."
         }
     }
 }

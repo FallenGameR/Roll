@@ -49,24 +49,37 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
 
 ## Remarkable
 
-Файлы на планшет переносит RCU из `C:\tools\RCU`. Инструкция к нему -
-`User Manual.pdf` там же, команды CLI в главе 4. Модуль ходит только
-через `RCU-CLI.exe --autoconnect --cli`, который подключается по
-последнему пресету, сохранённому в окне RCU. Отсюда разделение:
+Планшет ходит по Wi-Fi, адрес и пароль SSH - в пресете RCU, в
+`%APPDATA%\davisr\rcu.ini`. Это единственное место, где лежит пароль:
+файл локальный и в git не попадает. Смотреть и править пресет -
+`Get-RemarkableConnection` и `Set-RemarkableConnection`, обе пароль
+не печатают. Сам `rcu.ini` целиком не выводить: пароль там внутри JSON
+пресетов, и маска по строкам `password=` его не ловит.
 
-- спаривание, смена сети и адреса - руками в окне, `Open-Remarkable`;
-  шаги расписаны в его справке (`Get-Help Open-Remarkable -Full`);
-- загрузка - `Send-Remarkable`, списки - `Get-RemarkableDocument` и
-  `Get-RemarkableCollection`.
+Команды делятся по транспорту, потому что RCU-CLI годится не на всё:
 
-Без связи CLI за восемь секунд выходит с `connection unsuccessful`;
-обычно это значит, что планшет спит. Повторная загрузка того же файла
-создаёт на планшете второй документ, а не заменяет первый, поэтому
-перед заливкой пачки стоит глянуть `Get-RemarkableDocument`.
+- загрузка, `Send-Remarkable`, идёт через `RCU-CLI.exe --autoconnect
+  --cli`: он сам переводит PDF, EPUB и Markdown в формат планшета;
+- списки, `Get-RemarkableDocument` и `Get-RemarkableCollection`, идут
+  по SSH прямо из метаданных в `~/.local/share/remarkable/xochitl`.
+  RCU-CLI печатает в cp1252 и падает на первом кириллическом имени, а
+  `PYTHONIOENCODING` и `PYTHONUTF8` собранный exe игнорирует;
+- ssh берёт пароль через `SSH_ASKPASS` из `Tools\Remarkable\askpass.cmd`,
+  который читает активный пресет. Скрипт askpass лежит в `Tools`, а не
+  в `Private`, потому что модуль при импорте исполняет все `.ps1` из
+  `Private`, и askpass напечатал бы пароль.
 
-`%APPDATA%\davisr\rcu.ini` хранит пароль SSH открытым текстом внутри
-JSON пресетов. Файл не выводить целиком и не копировать: маска по
-строкам `password=` его не ловит.
+Код выхода RCU-CLI 5.1 врёт: после удачной загрузки он тоже 1. Падение
+видно по `Traceback`, а успех `Send-Remarkable` проверяет сам, по SSH,
+в конце пачки.
+
+Спящий планшет выключает Wi-Fi, и порт 22 молчит. Команды проверяют
+порт за две секунды и просят разбудить планшет. Повторная загрузка того
+же файла создаёт второй документ, а не заменяет первый.
+
+Спаривание с новым планшетом и включение SSH по Wi-Fi описаны в справке
+`Open-Remarkable`; инструкция к RCU - `C:\tools\RCU\User Manual.pdf`,
+CLI в главе 4.
 
 ## Как добавить команду
 
