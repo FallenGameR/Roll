@@ -1,7 +1,7 @@
 <#
-    Roll module - RPG music library management (yt-dlp download,
-    reorganize/tag, thumbnail resize, chapter splitting, fzf export) plus
-    the original dice-roll utility.
+    Roll module - инструменты волта настольных игр: фонотека и плейлисты
+    Winamp, диктовка, кубики, картинки, пульт Copilot. Устройство модуля
+    и правила, куда класть новый код, - в .github\copilot-instructions.md.
 #>
 
 $script:RollRoot = $PSScriptRoot
@@ -17,8 +17,9 @@ if ([Console]::OutputEncoding.CodePage -ne 65001) {
 }
 
 # Private helpers first (not exported), then public functions. Оба дерева
-# разложены по темам (Music, Playlists, Images, Dice), поэтому обход
-# рекурсивный: новый подраздел подхватывается без правки манифеста.
+# разложены по темам (Music, Playlists, Dictation, Images, Dice, Panel), поэтому обход
+# рекурсивный: новый подраздел подхватывается сам. Экспорт решает манифест:
+# новую публичную функцию надо дописать в FunctionsToExport в Roll.psd1.
 Get-ChildItem -Path "$PSScriptRoot\Private" -Filter '*.ps1' -Recurse -ErrorAction SilentlyContinue |
     ForEach-Object { . $_.FullName }
 
