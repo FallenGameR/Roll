@@ -54,6 +54,24 @@ except OSError:
     sys.exit("Already running")
 
 log.info("Loading model %s", MODEL)
+
+
+def disable_power_throttling():
+    # На батарее Windows включает EcoQoS для фоновых процессов без окна, и
+    # pythonw распознаёт втрое медленнее. Отказываемся от этого явно.
+    class State(ctypes.Structure):
+        _fields_ = [("Version", w.ULONG), ("ControlMask", w.ULONG), ("StateMask", w.ULONG)]
+
+    execution_speed = 0x1
+    state = State(1, execution_speed, 0)
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetCurrentProcess.restype = w.HANDLE
+    ok = kernel32.SetProcessInformation(kernel32.GetCurrentProcess(), 4,  # ProcessPowerThrottling
+                                        ctypes.byref(state), ctypes.sizeof(state))
+    log.info("Power throttling %s", "disabled" if ok else "left as is")
+
+
+disable_power_throttling()
 model = WhisperModel(MODEL, device="cpu", compute_type="int8")
 log.info("Ready. Hold the Copilot key to dictate.")
 winsound.Beep(1200, 80)

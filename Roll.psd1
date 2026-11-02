@@ -29,7 +29,8 @@
         'Install-Dictation',
         'Start-Dictation',
         'Stop-Dictation',
-        'Get-Dictation'
+        'Get-Dictation',
+        'Install-RollPanel'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()
