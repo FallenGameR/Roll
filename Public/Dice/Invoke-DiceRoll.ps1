@@ -68,9 +68,12 @@ filter Invoke-DiceRoll( $CritHits = @() )
                 if( $roll -eq 1         ){ $critMiss = $true }
                 if( $roll -in $critHits ){ $critHit = $true }
             }
-            $roll += $mod
             $total += $roll
         }
+
+        # Модификатор прибавляется к броску целиком, а не к каждой кости:
+        # 2d6+3 даёт 5-15, а не 8-18.
+        $total += $mod
 
         $line += " $(e 90 =) $total"
         if( $critMiss )             { $line += " $(e 93 CRIT) $(e 31 miss)"}
