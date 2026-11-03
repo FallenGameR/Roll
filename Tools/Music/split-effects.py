@@ -12,13 +12,14 @@
 SHORT_LOOPS явно.
 """
 import re
+import os
 import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
 
 FFPROBE = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "Gyan.FFmpeg_*/**/ffprobe.exe"))
 
 ROOT = Path(r"C:\vaults\Рудники Фанделвера\Adventure\Locations")

@@ -147,23 +147,18 @@ def transcribe(audio, recorded):
     set_state("preparing", audio=round(seconds, 1))
     t = time.time()
     # transcribe() сразу отрезает тишину (VAD) и считает признаки звука, а
-    # сами слова декодирует лениво, по сегменту за раз. Поэтому время до
-    # возврата - подготовка, а прогресс декодирования виден по концу
-    # каждого сегмента.
+    # сами слова декодирует лениво. Поэтому время до возврата - подготовка,
+    # а остальное - декодирование. Прогресса внутри декодирования нет:
+    # Whisper разбирает звук окнами по 30 с и отдаёт сегменты только после
+    # целого окна, а фраза почти всегда укладывается в одно окно.
     segments, info = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
                                       vad_filter=True, beam_size=5)
     prepared = time.time() - t
     speech = getattr(info, "duration_after_vad", seconds) or seconds
-    set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1), progress=0)
+    set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1))
     t = time.time()
-    parts = []
-    for s in segments:
-        parts.append(s.text.strip())
-        set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1),
-                  progress=min(1.0, s.end / seconds) if seconds else 1.0,
-                  since=t)
+    text = " ".join(s.text.strip() for s in segments).strip()
     decoded = time.time() - t
-    text = " ".join(parts).strip()
     log.info("%.1fs audio -> %.1fs: %s", seconds, prepared + decoded, text)
     typed = 0.0
     if text:

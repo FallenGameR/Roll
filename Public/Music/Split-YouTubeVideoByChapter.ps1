@@ -45,7 +45,7 @@ function Split-YouTubeVideoByChapter {
 
     $ErrorActionPreference = "Stop"
 
-    $ytDlp = "C:\Users\alexk\OneDrive\Apps\Tools\yt-dpl\yt-dlp.exe"
+    $ytDlp = Get-YtDlpPath
 
     $ffmpegDir = Split-Path (Find-WingetTool "Gyan.FFmpeg_*" "ffmpeg.exe")
     $ffmpeg = Join-Path $ffmpegDir "ffmpeg.exe"

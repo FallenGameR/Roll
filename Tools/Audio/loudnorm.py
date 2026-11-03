@@ -13,12 +13,13 @@
 неизбежного. Обложка и все ID3-теги переносятся.
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 FFMPEG = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "Gyan.FFmpeg_*/**/ffmpeg.exe"
     )
 )

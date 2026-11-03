@@ -16,6 +16,7 @@
     вместе с оценкой стабильности гармоник — намёк на вокал.
 """
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +24,7 @@ from pathlib import Path
 import numpy as np
 
 FFMPEG = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "Gyan.FFmpeg_*/**/ffmpeg.exe"
     )
 )

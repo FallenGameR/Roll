@@ -44,7 +44,8 @@ from mutagen.id3._util import ID3NoHeaderError
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import winamp_now  # noqa: E402
 
-ROLL = r"C:\vaults\Roll"
+ROLL = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROLL_PSD1 = os.path.join(ROLL, "Roll.psd1")
 TAXONOMY = os.path.join(ROLL, "Private", "Music", "Get-GenreTaxonomy.ps1")
 FFPROBE = os.environ.get("FFPROBE", "ffprobe")
 MARKER = "<<<roll-tagger-done>>>"
@@ -97,7 +98,7 @@ class PwshHost:
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", bufsize=1)
         self.run("[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
-                 "Import-Module C:\\vaults\\Roll\\Roll.psd1 -Force")
+                 f"Import-Module {ps_quote(ROLL_PSD1)} -Force")
 
     def run(self, command):
         with self.lock:
@@ -433,7 +434,7 @@ def winamp_icon():
     data = None
     if exe:
         tmp = Path(tempfile.gettempdir()) / "roll-winamp-icon.png"
-        script = ("Import-Module C:\\vaults\\Roll\\Roll.psd1 -Force; "
+        script = (f"Import-Module {ps_quote(ROLL_PSD1)} -Force; "
                   f"Get-ExeIcon -Path '{exe}' -Index {ICON_INDEX} -Size {ICON_SIZE} "
                   f"-Destination '{tmp}' | Out-Null")
         try:

@@ -12,18 +12,19 @@
 """
 import json
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 FFMPEG = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "Gyan.FFmpeg_*/**/ffmpeg.exe"))
 FFPROBE = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "Gyan.FFmpeg_*/**/ffprobe.exe"))
 MP3RGAIN = next(
-    Path(r"C:\Users\alexk\AppData\Local\Microsoft\WinGet\Packages").glob(
+    Path(os.environ["LOCALAPPDATA"], "Microsoft", "WinGet", "Packages").glob(
         "**/mp3rgain.exe"))
 
 TARGET_M = -11.0      # медиана momentary max по папке эффектов

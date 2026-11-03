@@ -49,7 +49,7 @@ function Save-YouTubePlaylist {
     # yt-dlp is a fixed personal install; ffmpeg/deno are installed via
     # winget and may land in a versioned package folder, so we resolve
     # them dynamically instead of hardcoding a version number.
-    $ytDlp = "C:\Users\alexk\OneDrive\Apps\Tools\yt-dpl\yt-dlp.exe"
+    $ytDlp = Get-YtDlpPath
 
     $ffmpegDir = Split-Path (Find-WingetTool "Gyan.FFmpeg_*" "ffmpeg.exe")
     $deno = Find-WingetTool "DenoLand.Deno_*" "deno.exe"
