@@ -317,7 +317,7 @@ def track_state():
         "index": now.get("index", -1),
         "situation": sections.get("Situation", ""),
         "description": sections.get("Description", ""),
-        "measurement": sections.get("Measurement") or sections.get("Evidence", ""),
+        "measurement": sections.get("Measurement", ""),
         "note": sections.get("Note", ""),
         "source": sections.get("Source", ""),
     }

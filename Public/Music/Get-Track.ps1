@@ -30,9 +30,7 @@
       - Situation   = the scene/prompt the track suits
       - Description = the musical description ("Description: ...")
       - Measurement = numbers of the acoustic measurement
-                      ("Measurement: ..."), $null if missing. The old
-                      label "Evidence: ..." is read here too until the
-                      library is rewritten
+                      ("Measurement: ..."), $null if missing
       - Note        = caveats about the track ("Note: ..."), $null if
                       missing
       - Source      = the source URL ("Source: ..."), $null if missing

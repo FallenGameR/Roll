@@ -245,44 +245,6 @@ class WriterTests(unittest.TestCase):
         self.assert_preserved(original, result)
         self.assertIn("Measurement: A title | Note: a subtitle", result["after"])
 
-    def test_legacy_evidence_replaced_in_place_by_measurement(self):
-        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
-        for separator in ("\n\n", " | "):
-            with self.subTest(separator=separator):
-                original = self.fixture(comment=comment.replace("\n\n", separator))
-                result = self.run_record(self.record({"Measurement": "Замер: 120 с"}))
-                self.assert_preserved(original, result)
-                self.assertEqual(separator.join((
-                    "A quiet road", "Description: Soft strings", "Measurement: Замер: 120 с",
-                    "Note: Uncertain", "Source: https://example.invalid/watch?v=abc")),
-                    result["after"])
-
-    def test_legacy_evidence_cleared_by_empty_measurement(self):
-        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
-        original = self.fixture(comment=comment)
-        result = self.run_record(self.record({"Measurement": ""}))
-        self.assert_preserved(original, result)
-        self.assertNotIn("Evidence", result["after"])
-        self.assertEqual("A quiet road\n\nDescription: Soft strings\n\nNote: Uncertain"
-                         "\n\nSource: https://example.invalid/watch?v=abc", result["after"])
-
-    def test_legacy_evidence_dropped_when_measurement_already_present(self):
-        comment = COMMENT.replace("\n\nNote:", "\n\nEvidence: YT: old words\n\nNote:")
-        original = self.fixture(comment=comment)
-        result = self.run_record(self.record({"Measurement": "Новый замер"}))
-        self.assert_preserved(original, result)
-        self.assertNotIn("Evidence", result["after"])
-        self.assertIn("\n\nMeasurement: Новый замер\n\nNote:", result["after"])
-
-    def test_legacy_evidence_untouched_by_other_fields_and_not_writable(self):
-        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
-        original = self.fixture(comment=comment)
-        result = self.run_record(self.record({"Description": "Струнные"}))
-        self.assert_preserved(original, result)
-        self.assertIn("\n\nEvidence: YT: old words\n\n", result["after"])
-        result = self.run_record(self.record({"Evidence": "x"}))
-        self.assertEqual("error", result["status"], result)
-
     def test_pipe_section_injection_remains_refused(self):
         for value in ("Title | Source: replaced", "Title | Unknown: injected",
                       "Title | Description : malformed", "Title | note: injected"):

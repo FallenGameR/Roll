@@ -200,11 +200,9 @@ function ConvertTo-GenreTagString {
     Only the situation is mandatory. Measurement holds the numbers of the
     acoustic measurement only; what YouTube comments or web credits say
     goes into Description and Note. Note carries caveats such as "the
-    scene is not documented anywhere". Measurement used to be called
-    Evidence and mixed both kinds of sources; the old label is still read
-    into Measurement until the library is rewritten. The trailing
-    "| Source: <url>" segment is occasionally missing, in which case
-    Source comes back as $null.
+    scene is not documented anywhere". The trailing "| Source: <url>"
+    segment is occasionally missing, in which case Source comes back as
+    $null.
 #>
 function ConvertTo-CommentParts {
     param(
@@ -236,13 +234,9 @@ function ConvertTo-CommentParts {
         $rest = $tail[0]
         if ($tail.Count -eq 2) { $note = $tail[1].Trim() }
 
-        # Evidence - прежнее имя Measurement; пока библиотеку не
-        # переписали, старая метка читается в то же свойство.
-        foreach ($label in 'Measurement', 'Evidence') {
-            $tail = $rest -split "\s*\|\s*${label}:\s*", 2
-            $rest = $tail[0]
-            if ($tail.Count -eq 2 -and -not $measurement) { $measurement = $tail[1].Trim() }
-        }
+        $tail = $rest -split '\s*\|\s*Measurement:\s*', 2
+        $rest = $tail[0]
+        if ($tail.Count -eq 2) { $measurement = $tail[1].Trim() }
 
         $description = $rest.Trim()
     }

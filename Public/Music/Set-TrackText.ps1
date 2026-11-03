@@ -17,10 +17,6 @@ function Set-TrackText {
         injection. Literal "|" inside prose or titles is allowed.
         Source and well-formed unknown sections are preserved verbatim.
 
-        Measurement used to be called Evidence. Writing Measurement into a
-        comment that still has an "Evidence:" section replaces that section
-        in place under the new label; clearing Measurement removes either.
-
         Supports exactly one TXXX:comment or one COMM comment in ID3v2.3/2.4.
         Ambiguous/missing comments, multi-value text, malformed sections,
         unsupported tag flags and unrepresentable text encodings are refused.
