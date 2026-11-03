@@ -23,6 +23,38 @@ function Invoke-RemarkableSsh {
         [string]$Command
     )
 
+    Use-RemarkableAskpass 'ssh' {
+        param($target)
+        ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 $target $Command
+    }
+}
+
+function Send-RemarkableRawFile {
+    <# Кладёт локальный файл на планшет по scp. Ключ -O нужен: SFTP на
+       планшете нет, и новый протокол scp рвёт соединение. #>
+    param(
+        [Parameter(Mandatory)]
+        [string]$LocalPath,
+
+        [Parameter(Mandatory)]
+        [string]$RemotePath
+    )
+
+    Use-RemarkableAskpass 'scp' {
+        param($target)
+        scp -O -q -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 $LocalPath "${target}:$RemotePath"
+    } | Out-Null
+}
+
+function Use-RemarkableAskpass {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Tool,
+
+        [Parameter(Mandatory)]
+        [scriptblock]$ScriptBlock
+    )
+
     $preset = Get-ActiveRemarkablePreset
     if (-not $preset) {
         throw 'Нет пресета подключения к Remarkable. Set-RemarkableConnection.'
@@ -32,15 +64,14 @@ function Invoke-RemarkableSsh {
               'что он в той же сети Wi-Fi.'
     }
 
-    $askpass = Join-Path $script:RollRoot 'Tools\Remarkable\askpass.cmd'
+    $target = "$($preset.username)@$($preset.host)"
+    $toolBlock = $ScriptBlock
     $saved = $env:SSH_ASKPASS, $env:SSH_ASKPASS_REQUIRE
-    $env:SSH_ASKPASS = $askpass
+    $env:SSH_ASKPASS = Join-Path $script:RollRoot 'Tools\Remarkable\askpass.cmd'
     $env:SSH_ASKPASS_REQUIRE = 'force'
     try {
         $output = @(Invoke-WithUtf8Console {
-            ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 `
-                "$($preset.username)@$($preset.host)" $Command 2>&1 |
-                ForEach-Object { "$_" }
+            & $toolBlock $target 2>&1 | ForEach-Object { "$_" }
         })
         $exitCode = $LASTEXITCODE
     }
@@ -48,7 +79,7 @@ function Invoke-RemarkableSsh {
         $env:SSH_ASKPASS, $env:SSH_ASKPASS_REQUIRE = $saved
     }
     if ($exitCode -ne 0) {
-        throw "ssh на Remarkable завершился с кодом ${exitCode}:`n$($output -join "`n")"
+        throw "$Tool на Remarkable завершился с кодом ${exitCode}:`n$($output -join "`n")"
     }
     $output
 }

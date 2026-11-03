@@ -77,6 +77,12 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
 порт за две секунды и просят разбудить планшет. Повторная загрузка того
 же файла создаёт второй документ, а не заменяет первый.
 
+Папки RCU-CLI создавать не умеет. `New-RemarkableCollection` кладёт
+`<id>.metadata` по scp и перезапускает интерфейс планшета (`systemctl
+restart xochitl`): это закрывает открытый документ. На планшете
+урезанный busybox: нет `base64`, у `head` нет `-1` (только `-n 1`), SFTP
+нет вовсе, поэтому scp только с ключом `-O`.
+
 Спаривание с новым планшетом и включение SSH по Wi-Fi описаны в справке
 `Open-Remarkable`; инструкция к RCU - `C:\tools\RCU\User Manual.pdf`,
 CLI в главе 4.

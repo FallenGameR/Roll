@@ -12,8 +12,8 @@
 Что меняется по дороге:
 - мягкие переносы (U+00AD) сайт ставит в каждое слово, они вырезаются;
 - номера параграфов "(1)" убираются, для чтения они только шум;
-- примечание встаёт прямо в текст на место сноски, мелким шрифтом в
-  квадратных скобках;
+- примечание встаёт прямо в текст на место сноски, курсивом в квадратных
+  скобках; курсив внутри примечания при этом становится прямым;
 - внешние ссылки в примечаниях превращаются в простой текст.
 
 Файл называется "097 - краткое содержание.epub": номер с нулями, чтобы
@@ -35,6 +35,33 @@ FIRST_ID = 1346570000
 
 TITLES = {
     97: "Пороки вечны, совесть карает",
+    98: "Блага фортуны смертны, душа сильнее",
+    99: "Горюй по сыну в меру",
+    100: "В защиту слога Фабиана",
+    101: "Живи каждый день как последний",
+    102: "Посмертное признание и бессмертие души",
+    103: "Берегись людей, не выставляй мудрость",
+    104: "От себя не уедешь",
+    105: "Как жить безопасно среди людей",
+    106: "Благо телесно, но это мелочь",
+    107: "Терпеть беды и следовать судьбе",
+    108: "Философию учат ради жизни",
+    109: "Чем мудрец полезен мудрецу",
+    110: "Страхи пусты, довольствуйся малым",
+    111: "Софизмы бесполезны для жизни",
+    112: "Закоренелого порочника не исправить",
+    113: "Брось пустые споры, живи справедливо",
+    114: "Испорченная речь выдаёт больную душу",
+    115: "Красота души дороже денег и слов",
+    116: "Страсть легче не впустить, чем выгнать",
+    117: "Философия должна учить жить",
+    118: "Не проси у фортуны, пойми благо",
+    119: "Богат тот, кому хватает малого",
+    120: "Добродетель узнаём по постоянству человека",
+    121: "Животные от рождения берегут себя",
+    122: "Ночная жизнь идёт против природы",
+    123: "Привыкать к малому, не слушать соблазнителей",
+    124: "Благо человека в совершенном разуме",
 }
 
 CSS = """\
@@ -43,8 +70,10 @@ h1 { font-size: 1.5em; font-weight: bold; text-align: center; margin: 1em 0 0.3e
 p.sub { text-align: center; font-style: italic; text-indent: 0; margin: 0 2em 1.5em 2em; }
 p { text-indent: 1.5em; margin: 0; text-align: justify; }
 p.greet { text-indent: 0; margin-bottom: 0.5em; font-style: italic; }
+p.verse { text-indent: 0; text-align: left; margin: 0.6em 0 0.6em 2em; }
 sup { font-size: 0.7em; line-height: 0.1; }
-span.note { font-size: 0.8em; font-style: normal; }
+span.note { font-style: italic; }
+span.note i { font-style: normal; }
 """
 
 
@@ -107,17 +136,44 @@ def parse(page):
     body = page[page.index('<div class="otext">'):]
     body = body[:body.index("</div>")]
     body = clean(body)
-    paragraphs = [inline(p, notes) for p in re.split(r"</?p>", body)]
-    paragraphs = [p for p in paragraphs if p]
+    body = re.sub(r"<table.*?</table>", verse, body, flags=re.S)
+    paragraphs = []
+    for chunk in re.split(r"</?p>", body):
+        is_verse = chunk.strip().startswith(VERSE)
+        text = inline(chunk.replace(VERSE, ""), notes)
+        if is_verse:
+            text = re.sub(r"\s*" + re.escape(LINE_BREAK) + r"\s*", "<br/>", text).strip()
+        if text:
+            paragraphs.append(("verse" if is_verse else "", text))
     return paragraphs, notes
+
+
+VERSE = "@@VERSE@@"
+LINE_BREAK = "@@BR@@"
+
+
+def verse(m):
+    """Стихи на сайте стоят таблицей: номер параграфа в одной ячейке,
+    строки через <br> в ячейке class=cit."""
+    cells = re.findall(r"<td class=cit>(.*?)</td>", m.group(0), re.S)
+    if not cells:
+        cells = [re.sub(r"</?(table|tr|td)[^>]*>", " ", m.group(0))]
+    lines = LINE_BREAK.join(cells)
+    lines = re.sub(r"<br\s*/?>", LINE_BREAK, lines)
+    return f"</p><p>{VERSE}{lines}</p><p>"
 
 
 def build(n, title, paragraphs, out_dir):
     name = f"{n:03d} - {title}"
     heading = f"Письмо {roman(n)}"
     body = [f"<h1>{heading}</h1>", f'<p class="sub">{html.escape(title)}</p>']
-    for i, p in enumerate(paragraphs):
-        cls = ' class="greet"' if i == 0 and "приветствует" in p else ""
+    for i, (kind, p) in enumerate(paragraphs):
+        if kind == "verse":
+            cls = ' class="verse"'
+        elif i == 0 and "приветствует" in p:
+            cls = ' class="greet"'
+        else:
+            cls = ""
         body.append(f"<p{cls}>{p}</p>")
 
     xhtml = (
