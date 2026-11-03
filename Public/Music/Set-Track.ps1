@@ -36,15 +36,19 @@
     A single mp3 file, or a folder to recurse for mp3s.
 
 .PARAMETER Intensity
-    Replaces the Intensity values (Background/Tension/Combat/Crisis).
+    Replaces the Intensity values (Idle/Tension/Battle/Climax), written
+    in escalation order: Idle,Tension rather than Tension,Idle.
 
 .PARAMETER Emotion
-    Replaces the Emotion values (Dread/Hostile/Haven/Tragic/Triumph/
-    Melancholy/Playful/Secrets/Divine/Forbidden).
+    Replaces the Emotion values (Anger/Fear/Sorrow/Reverence/Curiosity/
+    Light).
 
 .PARAMETER Scene
-    Replaces the Scene values (Depths/Urban/Tavern/Lively/Chase/Travel/
-    Investigation/Anomaly).
+    Replaces the Scene values, written as Group(Tag): Rest(Tavern),
+    Rest(Peaceful), Travel, Urban(Town), Urban(Court), Mystic(Ritual),
+    Mystic(Haunt), Dungeon(Ruins), Dungeon(Underworld),
+    Action(Investigation), Action(Chase), Action(Stealth), Other.
+    Required for every track except Type Intro, Outro and Effect.
 
 .PARAMETER Game
     Replaces the Game values (Fantasy/Modern/SciFi).
@@ -78,6 +82,9 @@
     other category untouched.
 .EXAMPLE
     Set-Track -Path "C:\vaults\Music\Magicka\Track.mp3" -IsUnsorted:$false -Apply
+.EXAMPLE
+    Set-Track -Path "C:\vaults\Music\Witcher 3\Track.mp3" -Scene 'Dungeon(Ruins)','Mystic(Haunt)' -Apply
+    Group(Tag) values need quotes: unquoted parentheses are PowerShell syntax.
 #>
 function Set-Track {
     param(

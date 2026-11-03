@@ -108,7 +108,7 @@ function ConvertFrom-GenreTagString {
     format or the newer self-describing "Category:value" format) into
     Intensity / Emotion / Scene / Game / Type arrays plus
     IsUnsorted/IsExcluded/IsDelete booleans and an Unmatched array. This is
-    the single entry point Get-Track and Update-MusicGenreTag should use
+    the single entry point Get-Track and Set-Track should use
     for reading a Genre tag, regardless of which format a given file was
     written in.
 

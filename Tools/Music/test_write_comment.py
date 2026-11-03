@@ -51,7 +51,7 @@ class WriterTests(unittest.TestCase):
         self.path.write_bytes(b"\xff\xfb\x90\x64" + bytes(range(256)) * 30)
         tags = ID3()
         tags.add(TIT2(encoding=1, text=["Unchanged title"]))
-        tags.add(TCON(encoding=1, text=["Intensity:Background Emotion:Haven"]))
+        tags.add(TCON(encoding=1, text=["Intensity:Idle Emotion:Light Scene:Rest(Peaceful)"]))
         tags.add(POPM(email="player@example.invalid", rating=196, count=19))
         tags.add(APIC(encoding=1, mime="image/png", type=3, desc="cover", data=b"\x89PNG\r\n" * 100))
         tags.add(TXXX(encoding=1, desc="unrelated annotation", text=["Keep me"]))

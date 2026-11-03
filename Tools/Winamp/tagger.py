@@ -73,11 +73,11 @@ def load_taxonomy():
                                       help_body.group(1), re.M):
             hints[value] = hint.replace("''", "'")
 
-    # Внутри категории значения идут по алфавиту: так их находят глазами.
-    # Кроме Intensity - там порядок таксономии сам по себе шкала, от ровного
-    # фона до пика, и алфавит эту шкалу ломает.
+    # Intensity, Emotion и Scene идут в порядке словаря: там он задан
+    # нарочно (по нарастанию, от тёмного к светлому, группы сцен по
+    # панели), и алфавит его ломает. Game и Type - по алфавиту.
     for category in values:
-        if category != "Intensity":
+        if category not in ("Intensity", "Emotion", "Scene"):
             values[category].sort(key=str.lower)
     return categories, values, sorted(meta, key=str.lower), hints
 
@@ -496,6 +496,12 @@ PAGE = r"""<!doctype html>
  .cat h2 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
            color:#8b8f9c; margin:0 0 7px; font-weight:600; }
  .row { display:flex; flex-wrap:wrap; gap:6px; }
+ .grp { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 6px;
+        border:1px dashed #3a3f4d; border-radius:8px; }
+ .grp > span { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8b8f9c;
+               margin:0 2px 0 4px; }
+ .grp:has(input:checked) { border:1px solid #43708f; background:#1a2530; }
+ .grp:has(input:checked) > span { color:#b9d3e6; }
  label { display:inline-flex; align-items:center; gap:5px; padding:5px 9px;
          border:1px solid #333744; border-radius:6px; background:#1b1d24;
          cursor:pointer; user-select:none; font-size:14px; white-space:nowrap; }
@@ -627,12 +633,23 @@ function render(d){
   for (const cat of CATS){
     const on = new Set(d.selected[cat] || []);
     html += `<div class="cat"><h2>${cat}</h2><div class="row">`;
+    // Scene пишется как Группа(Тег): теги одной группы стоят в общей
+    // рамке с подписью группы, на кнопке - только сам тег.
+    let group = null;
     for (const v of VALUES[cat] || []){
+      const m = cat === "Scene" ? /^(.+)\((.+)\)$/.exec(v) : null;
+      const g = m ? m[1] : null;
+      if (cat === "Scene" && g !== group){
+        if (group) html += `</div>`;
+        if (g) html += `<div class="grp"><span>${esc(g)}</span>`;
+        group = g;
+      }
       const id = "t_" + cat + "_" + v;
       html += `<label class="${on.has(v)?"on":""}" for="${id}" title="${esc(HINTS[v]||"")}">
                <input type="checkbox" id="${id}" data-cat="${cat}" data-val="${v}"
-                      ${on.has(v)?"checked":""}>${v}</label>`;
+                      ${on.has(v)?"checked":""}>${esc(m ? m[2] : v)}</label>`;
     }
+    if (group) html += `</div>`;
     html += `</div></div>`;
   }
   const meta = new Set(d.meta || []);
@@ -666,7 +683,9 @@ function render(d){
 
 function collect(){
   const sel = {}, meta = [];
-  for (const cat of CATS) sel[cat] = [];
+  // Значения, которых нет в словаре (старая разметка до миграции), галочек
+  // не имеют; без этой строки первая же запись стёрла бы их молча.
+  for (const cat of CATS) sel[cat] = (cur.selected[cat] || []).filter(v => !(VALUES[cat] || []).includes(v));
   document.querySelectorAll("input[data-cat]").forEach(box => {
     if (!box.checked) return;
     const cat = box.dataset.cat, val = box.dataset.val;

@@ -28,7 +28,7 @@
     Import-Track
     Loads the default Tracks.csv.
 .EXAMPLE
-    Import-Track | Where-Object { $_.Game -contains 'Fantasy' -and $_.Intensity -contains 'Combat' }
+    Import-Track | Where-Object { $_.Game -contains 'Fantasy' -and $_.Intensity -contains 'Battle' }
     Fast, offline filtering without touching the mp3 files at all.
 .EXAMPLE
     Export-Track; Import-Track

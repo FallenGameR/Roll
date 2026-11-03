@@ -24,7 +24,6 @@
         'Export-Playlist',
         'Import-WinampPlaylist',
         'Sync-WinampPlaylist',
-        'Update-MusicGenreTag',
         'Start-WinampPlaylist',
         'Get-PngPrompt',
         'Get-ExeIcon',

@@ -15,8 +15,7 @@
     существующего ID3-блока, через Tools\Music\write_genre.py. Отсюда же
     следует, что закрывать Winamp перед тегированием больше не нужно.
 
-    Общая точка для Update-MusicGenreTag (массовый перевод формата) и
-    Set-Track (точечная простановка).
+    Общая точка записи жанра для Set-Track.
 #>
 function Set-GenreTag {
     param(

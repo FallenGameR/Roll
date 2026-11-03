@@ -4,27 +4,28 @@
     decomposed into structured Roll.MusicTrack objects.
 
 .DESCRIPTION
-    Each track's Genre id3 tag is a string built from a 6-category
-    tagging scheme (e.g. "Background Dread/Secrets Anomaly Modern/SciFi"):
-    space-separated groups, optionally with "/"-separated alternatives
-    inside a group. Tokens are flattened and bucketed via the known-tag
-    dictionary (Private/Music/Get-GenreTaxonomy.ps1) into:
-      - Intensity = energy/pacing (Background/Tension/Combat/Crisis)
-      - Emotion   = emotional/narrative tone (Dread/Haven/Hostile/...)
-      - Scene     = place + type of content (Depths/Urban/Tavern/Lively/
-                    Chase/Investigation/Anomaly)
-      - Game      = source-material era (Fantasy/Modern/SciFi)
-      - Type      = catch-all bucket for everything that isn't
-                    Intensity/Emotion/Scene/Game: production hints
-                    (Effect = soundboard/sfx, Vocals = has singing/
-                    lyrics), the Intro/Outro campaign theme markers,
-                    Unsorted (pipeline hasn't finished categorizing this
-                    track yet), and any tag not yet known to the
-                    dictionary (should normally not appear; if it does,
-                    the taxonomy needs to be extended). These are all
-                    just elements of the same Type array - not separate
-                    boolean/array properties - so filtering for any of
-                    them is always `$_.Type -contains 'X'`.
+    Each track's Genre id3 tag is a self-describing string
+    "Category:value1,value2 Category:value3" (e.g. "Intensity:Idle,Tension
+    Emotion:Fear Scene:Dungeon(Ruins) Game:Fantasy Meta:Unsorted").
+    Values and their order live in the dictionary
+    (Private/Music/Get-GenreTaxonomy.ps1):
+      - Intensity = what happens in the scene, by escalation
+                    (Idle/Tension/Battle/Climax)
+      - Emotion   = what the listener feels, dark to light
+                    (Anger/Fear/Sorrow/Reverence/Curiosity/Light)
+      - Scene     = place and kind of scene as Group(Tag): Rest(Tavern),
+                    Rest(Peaceful), Travel, Urban(Town), Urban(Court),
+                    Mystic(Ritual), Mystic(Haunt), Dungeon(Ruins),
+                    Dungeon(Underworld), Action(Investigation),
+                    Action(Chase), Action(Stealth), Other. Required for
+                    every track except Type Intro, Outro and Effect
+      - Game      = era of the sound (Fantasy/Modern/SciFi)
+      - Type      = role of the recording: Effect (soundboard/sfx),
+                    Vocals (has singing/lyrics), Intro and Outro (open or
+                    close a campaign, arc or chapter)
+    Meta flags (Unsorted/Excluded/Delete) become IsUnsorted/IsExcluded/
+    IsDelete booleans. Values the dictionary does not know end up in
+    Unmatched instead of being dropped.
 
     The Comment id3 tag is similarly split into:
       - Situation   = the scene/prompt the track suits
@@ -64,7 +65,10 @@
 .EXAMPLE
     Get-Track -Path "C:\vaults\Music\03 - D&D Combat"
 .EXAMPLE
-    Get-Track | Where-Object { $_.Intensity -contains 'Combat' }
+    Get-Track | Where-Object { $_.Intensity -contains 'Battle' }
+.EXAMPLE
+    Get-Track | Where-Object { $_.Scene -like 'Dungeon(*' }
+    Every track of the Dungeon group, whatever the tag inside.
 #>
 function Get-Track {
     param(
