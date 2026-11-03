@@ -317,7 +317,7 @@ def track_state():
         "index": now.get("index", -1),
         "situation": sections.get("Situation", ""),
         "description": sections.get("Description", ""),
-        "evidence": sections.get("Evidence", ""),
+        "measurement": sections.get("Measurement") or sections.get("Evidence", ""),
         "note": sections.get("Note", ""),
         "source": sections.get("Source", ""),
     }
@@ -357,16 +357,79 @@ ICON_INDEX = 3
 ICON_SIZE = 64
 
 
+def winamp_exe():
+    for candidate in (Path(os.environ.get("ProgramFiles(x86)", "")) / "Winamp" / "winamp.exe",
+                      Path(os.environ.get("ProgramFiles", "")) / "Winamp" / "winamp.exe"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def launch_winamp():
+    """Запускает Winamp, если он ещё не запущен. Через оболочку, чтобы плеер
+    не зависел от сервера и пережил его остановку."""
+    if winamp_now.current().get("running"):
+        return
+    exe = winamp_exe()
+    if not exe:
+        raise RuntimeError("winamp.exe не найден в Program Files")
+    os.startfile(exe)
+
+
+CATALOG = Path(os.environ.get("APPDATA", "")) / "Winamp" / "Plugins" / "ml" / "playlists"
+
+
+def scenes():
+    """Плейлисты медиатеки, чьё имя начинается с точки: их выгружает
+    Import-WinampPlaylist из файлов кампании. Остальные - личные Мастера,
+    селектору они не нужны."""
+    import xml.etree.ElementTree as ET
+    index = CATALOG / "playlists.xml"
+    if not index.exists():
+        return []
+    result = []
+    for node in ET.parse(index).getroot():
+        title = node.get("title") or ""
+        m3u = CATALOG / (node.get("filename") or "")
+        if not title.startswith(".") or not m3u.is_file():
+            continue
+        tracks = [line.strip() for line in m3u.read_text(encoding="utf-8-sig").splitlines()
+                  if line.strip() and not line.startswith("#")]
+        place, _, scene = title[1:].partition(" - ")
+        result.append({"title": title, "place": place, "scene": scene,
+                       "tracks": tracks, "seconds": int(node.get("seconds") or 0)})
+    return result
+
+
+def scenes_state():
+    """Список сцен и та, что сейчас в плеере: она узнаётся по совпадению
+    треков, так что кнопка не врёт, даже если плейлист открыли в самом Winamp."""
+    items = playlist_state().get("items", [])
+    loaded = [i["path"].lower() for i in items]
+    out, current = [], ""
+    for s in scenes():
+        if loaded and [t.lower() for t in s["tracks"]] == loaded:
+            current = s["title"]
+        out.append({k: s[k] for k in ("title", "place", "scene", "seconds")}
+                   | {"songs": len(s["tracks"])})
+    return {"scenes": out, "current": current}
+
+
+def load_scene(title):
+    match = next((s for s in scenes() if s["title"] == title), None)
+    if not match:
+        raise RuntimeError(f"нет плейлиста {title}")
+    if not winamp_now.load(match["tracks"]):
+        raise RuntimeError("Winamp не запущен")
+    _playlist_cache["at"] = 0.0
+    return len(match["tracks"])
+
+
 def winamp_icon():
     """Иконка вкладки берётся из установленного winamp.exe, а не хранится у нас."""
     if "png" in ICON_CACHE:
         return ICON_CACHE["png"]
-    exe = None
-    for candidate in (Path(os.environ.get("ProgramFiles(x86)", "")) / "Winamp" / "winamp.exe",
-                      Path(os.environ.get("ProgramFiles", "")) / "Winamp" / "winamp.exe"):
-        if candidate.is_file():
-            exe = candidate
-            break
+    exe = winamp_exe()
     data = None
     if exe:
         tmp = Path(tempfile.gettempdir()) / "roll-winamp-icon.png"
@@ -415,10 +478,12 @@ PAGE = r"""<!doctype html>
  .failed { color:#e07a7a; }
  .columns { display:flex; align-items:flex-start; gap:24px; padding:18px 20px 14px; }
  main { flex:1 1 auto; min-width:0; display:flex; flex-direction:column;
-        min-height:calc(100vh - 94px); }
- aside { flex:0 0 510px; margin-left:auto; position:sticky; top:66px;
-         max-height:calc(100vh - 86px); overflow:auto;
+        min-height:calc(100vh / var(--z, 1) - 94px); }
+ aside { flex:0 0 auto; max-width:510px; margin-left:auto; position:sticky;
+         top:calc(var(--hdr, 66px) + 18px);
+         height:calc(100vh / var(--z, 1) - var(--hdr, 66px) - 36px); display:flex; flex-direction:column;
          border-left:1px solid #2c2f38; padding-left:16px; }
+ aside .pl { flex:1 1 auto; overflow:auto; min-height:0; }
  aside h2 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
             color:#8b8f9c; margin:0 0 8px; font-weight:600; }
  .pl { list-style:none; margin:0; padding:0; font-size:13px; }
@@ -439,11 +504,38 @@ PAGE = r"""<!doctype html>
  label.meta.on { background:#5a4320; border-color:#8a6a33; color:#f6ead6; }
  input { accent-color:#5aa7d8; margin:0; }
  .prose { margin-top:auto; border-top:1px solid #2c2f38; padding-top:16px;
-          color:#b9bdc9; font-size:16px; line-height:1.55; }
+          color:#b9bdc9; font-size:14px; line-height:1.5; }
  .prose div { margin-bottom:11px; }
  .prose b { color:#e6e8ee; font-weight:700; }
  .idle { padding:40px 20px; color:#8b8f9c; }
+ .launch { margin-left:10px; font:inherit; padding:7px 14px; cursor:pointer; white-space:nowrap;
+           background:#2b4a63; color:#eaf4fb; border:1px solid #43708f; border-radius:6px; }
+ .launch:hover { background:#345a78; }
+ .launch:disabled { cursor:default; opacity:.6; }
  code { color:#7f8596; font-size:12px; }
+ #scenebtn { flex:0 0 auto; width:100%; margin-top:10px; text-align:left;
+             font:inherit; font-size:14px; padding:8px 12px; cursor:pointer;
+             background:#242731; color:#dcdde1; border:1px solid #43708f; border-radius:8px;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+ #scenebtn:hover { background:#2e3240; }
+ #scenebtn small { color:#8b8f9c; margin-right:6px; }
+ #scenes { position:fixed; right:18px; bottom:62px; z-index:21; width:min(560px, calc(100vw - 36px));
+           max-height:calc(100vh / var(--z, 1) - 90px); display:none; flex-direction:column;
+           background:#1d1f26; border:1px solid #333744; border-radius:10px;
+           box-shadow:0 10px 30px rgba(0,0,0,.6); }
+ #scenes.open { display:flex; }
+ #scenes input { margin:12px 12px 6px; padding:7px 10px; font:inherit; font-size:14px;
+                 background:#15161a; color:#dcdde1; border:1px solid #333744; border-radius:6px; }
+ #scenelist { overflow:auto; padding:4px 12px 12px; }
+ .place { margin-top:10px; }
+ .place h3 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
+             color:#8b8f9c; margin:0 0 6px; font-weight:600; }
+ .scene { display:inline-block; margin:0 6px 6px 0; padding:5px 10px; font-size:14px;
+          border:1px solid #333744; border-radius:6px; background:#1b1d24; cursor:pointer; }
+ .scene:hover, .scene.hot { border-color:#5aa7d8; }
+ .scene.now { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
+ .scene i { color:#7f8596; font-style:normal; font-size:12px; margin-left:6px; }
+ .scene.now i { color:#b9d3e6; }
 </style></head><body>
 <header>
   <div class="transport">
@@ -470,9 +562,40 @@ PAGE = r"""<!doctype html>
   <aside>
     <h2>Плейлист</h2>
     <ul class="pl" id="playlist"></ul>
+    <button id="scenebtn" title="Сменить плейлист (клавиша P)"><small>плейлист</small><span id="scenename">…</span></button>
   </aside>
 </div>
+<div id="scenes">
+  <input id="scenefind" placeholder="Локация или сцена… Enter - включить, Esc - закрыть" autocomplete="off">
+  <div id="scenelist"></div>
+</div>
 <script>
+// Во вкладке приложения (пульт открывает её с #app) страница наследует зум
+// приложения. outerWidth в пикселях окна, innerWidth в пикселях страницы:
+// их отношение и есть этот зум, и CSS zoom его снимает. 100vh под zoom
+// сжимается вместе со страницей, поэтому CSS делит его на --z.
+function fitZoom(){
+  const root = document.documentElement;
+  if (location.hash !== "#app") {
+    root.style.removeProperty("zoom");
+    root.style.removeProperty("--z");
+    return;
+  }
+  const z = Math.min(1, Math.round(innerWidth / outerWidth * 100) / 100) || 1;
+  root.style.zoom = z;
+  root.style.setProperty("--z", z);
+}
+fitZoom();
+addEventListener("resize", fitZoom);
+addEventListener("hashchange", fitZoom);
+
+// Шапка переносится на вторую строку, когда название трека длинное, и
+// правая колонка должна знать её настоящую высоту, иначе кнопка
+// плейлиста уезжает под нижний край окна.
+new ResizeObserver(() => document.documentElement.style.setProperty(
+  "--hdr", document.querySelector("header").offsetHeight + "px"))
+  .observe(document.querySelector("header"));
+
 const CATS = __CATS__, VALUES = __VALUES__, META = __META__, HINTS = __HINTS__;
 let cur = null, saving = false, plDrawn = "";
 
@@ -525,7 +648,7 @@ function render(d){
   html += `<div class="prose">`;
   if (d.situation)   html += `<div><b>Situation.</b> ${esc(d.situation)}</div>`;
   if (d.description) html += `<div><b>Description.</b> ${esc(d.description)}</div>`;
-  if (d.evidence)    html += `<div><b>Evidence.</b> ${esc(d.evidence)}</div>`;
+  if (d.measurement) html += `<div><b>Measurement.</b> ${esc(d.measurement)}</div>`;
   if (d.note)        html += `<div><b>Note.</b> ${esc(d.note)}</div>`;
   html += `<div><code>${esc(d.path)}</code></div></div>`;
   document.getElementById("main").innerHTML = html;
@@ -650,7 +773,11 @@ async function poll(){
   try {
     const d = await (await fetch("/api/now")).json();
     if (!d.running){
-      document.getElementById("main").innerHTML = '<div class="idle">Winamp не запущен.</div>';
+      // Перерисовываем только при переходе в это состояние, иначе опрос
+      // раз в 700 мс пересоздавал бы кнопку прямо под курсором.
+      if (!document.getElementById("launch"))
+        document.getElementById("main").innerHTML = '<div class="idle">Winamp не запущен. ' +
+          '<button id="launch" class="launch">Запустить Winamp</button></div>';
       document.getElementById("name").textContent = "—"; cur = null;
     } else if (d.error){
       document.getElementById("main").innerHTML = '<div class="idle">' + esc(d.error) + '</div>';
@@ -680,6 +807,91 @@ async function poll(){
 }
 setInterval(poll, 700); poll();
 setInterval(pollPlaylist, 1000); pollPlaylist();
+
+// Селектор сцен: плейлисты медиатеки с точкой в начале имени,
+// сгруппированные по локации (".Фандалин - Бой" -> Фандалин / Бой).
+let scenes = [], sceneNow = "";
+const sceneBox = document.getElementById("scenes"), sceneFind = document.getElementById("scenefind");
+
+async function pollScenes(){
+  try {
+    const d = await (await fetch("/api/scenes")).json();
+    scenes = d.scenes || []; sceneNow = d.current || "";
+    document.getElementById("scenename").textContent =
+      sceneNow ? sceneNow.slice(1) : (scenes.length ? "свой список" : "нет плейлистов");
+    if (sceneBox.classList.contains("open")) drawScenes();
+  } catch(e){ }
+}
+
+function drawScenes(){
+  const q = sceneFind.value.trim().toLowerCase();
+  const groups = new Map();
+  for (const s of scenes){
+    if (q && !s.title.toLowerCase().includes(q)) continue;
+    if (!groups.has(s.place)) groups.set(s.place, []);
+    groups.get(s.place).push(s);
+  }
+  let html = "", first = true;
+  for (const [place, list] of groups){
+    html += `<div class="place"><h3>${esc(place)}</h3>`;
+    for (const s of list){
+      const cls = "scene" + (s.title === sceneNow ? " now" : "") + (first ? " hot" : "");
+      first = false;
+      html += `<span class="${cls}" data-t="${esc(s.title)}">${esc(s.scene || place)}` +
+              `<i>${s.songs}</i></span>`;
+    }
+    html += `</div>`;
+  }
+  const list = document.getElementById("scenelist");
+  list.innerHTML = html || '<div class="idle" style="padding:10px 0">ничего не нашлось</div>';
+  list.querySelectorAll(".scene").forEach(el => el.onclick = () => pickScene(el.dataset.t));
+}
+
+async function pickScene(title){
+  closeScenes();
+  setState("включаю " + title.slice(1) + "…");
+  try {
+    const j = await (await fetch("/api/scene", {method:"POST",
+      body: JSON.stringify({title})})).json();
+    if (j.ok){ setState("играет: " + title.slice(1), "saved"); sceneNow = title;
+      document.getElementById("scenename").textContent = title.slice(1); pollPlaylist(); }
+    else setState("ошибка: " + j.error, "failed");
+  } catch(e){ setState("ошибка: " + e, "failed"); }
+}
+
+function openScenes(){
+  sceneBox.classList.add("open"); sceneFind.value = ""; drawScenes(); sceneFind.focus();
+}
+function closeScenes(){ sceneBox.classList.remove("open"); }
+
+document.getElementById("scenebtn").onclick = () =>
+  sceneBox.classList.contains("open") ? closeScenes() : openScenes();
+sceneFind.addEventListener("input", drawScenes);
+sceneFind.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeScenes();
+  if (e.key === "Enter"){ const hot = document.querySelector("#scenelist .scene.hot");
+    if (hot) pickScene(hot.dataset.t); }
+});
+document.addEventListener("keydown", e => {
+  if ((e.key === "p" || e.key === "з") && !e.ctrlKey && !e.altKey &&
+      !/INPUT|TEXTAREA/.test(document.activeElement.tagName)){ e.preventDefault(); openScenes(); }
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("#scenes, #scenebtn")) closeScenes();
+});
+setInterval(pollScenes, 3000); pollScenes();
+
+document.getElementById("main").addEventListener("click", async e => {
+  const b = e.target.closest("#launch");
+  if (!b) return;
+  b.disabled = true; b.textContent = "Запускаю…";
+  try {
+    const j = await (await fetch("/api/launch", {method:"POST", body:"{}"})).json();
+    if (!j.ok){ b.disabled = false; b.textContent = "Запустить Winamp";
+      setState("ошибка: " + j.error, "failed"); }
+  } catch(err){ b.disabled = false; b.textContent = "Запустить Winamp";
+    setState("ошибка: " + err, "failed"); }
+});
 </script></body></html>
 """
 
@@ -693,6 +905,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        # Без этого вкладка приложения после перезапуска сервера показывала
+        # старую страницу из кэша.
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
 
@@ -713,6 +928,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/playlist"):
             self._send(200, json.dumps(playlist_state(), ensure_ascii=False))
+            return
+        if self.path.startswith("/api/scenes"):
+            self._send(200, json.dumps(scenes_state(), ensure_ascii=False))
             return
         page = (PAGE.replace("__CATS__", json.dumps(CATEGORIES))
                     .replace("__VALUES__", json.dumps(VALUES, ensure_ascii=False))
@@ -739,6 +957,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.startswith("/api/jump"):
                 ok = winamp_now.jump(payload["index"])
                 self._send(200, json.dumps({"ok": ok}))
+                return
+            if self.path.startswith("/api/launch"):
+                launch_winamp()
+                self._send(200, json.dumps({"ok": True}))
+                return
+            if self.path.startswith("/api/scene"):
+                songs = load_scene(payload["title"])
+                self._send(200, json.dumps({"ok": True, "songs": songs}))
                 return
             if self.path.startswith("/api/stars"):
                 stars = write_stars(payload["path"], int(payload["stars"]))

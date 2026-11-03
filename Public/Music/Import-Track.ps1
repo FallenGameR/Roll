@@ -60,7 +60,7 @@ function Import-Track {
             Type        = ConvertTo-ArrayValue $_.Type
             Situation   = $_.Situation
             Description = $_.Description
-            Evidence    = $_.Evidence
+            Measurement = if ($_.PSObject.Properties['Measurement']) { $_.Measurement } else { $_.Evidence }
             Note        = $_.Note
             Source      = $_.Source
             Path        = $_.Path

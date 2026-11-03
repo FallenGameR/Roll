@@ -6,7 +6,7 @@
 
 $script:RollRoot = $PSScriptRoot
 
-# Модуль работает с кириллицей: Description/Situation/Evidence в тегах и
+# Модуль работает с кириллицей: Description/Situation/Measurement в тегах и
 # русские имена файлов кампании. По умолчанию консоль Windows читает и
 # печатает в OEM-кодировке (437/866/850), из-за чего вывод ffprobe в
 # UTF-8 превращается в кракозябры ещё на этапе чтения, а вывести

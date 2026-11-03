@@ -29,8 +29,10 @@
     The Comment id3 tag is similarly split into:
       - Situation   = the scene/prompt the track suits
       - Description = the musical description ("Description: ...")
-      - Evidence    = which sources the description came from
-                      ("Evidence: ..."), $null if missing
+      - Measurement = numbers of the acoustic measurement
+                      ("Measurement: ..."), $null if missing. The old
+                      label "Evidence: ..." is read here too until the
+                      library is rewritten
       - Note        = caveats about the track ("Note: ..."), $null if
                       missing
       - Source      = the source URL ("Source: ..."), $null if missing
@@ -149,7 +151,7 @@ function Get-Track {
             Type        = $type.ToArray()
             Situation   = $commentParts.Situation
             Description = $commentParts.Description
-            Evidence    = $commentParts.Evidence
+            Measurement = $commentParts.Measurement
             Note        = $commentParts.Note
             Source      = $commentParts.Source
             Path        = $f.FullName

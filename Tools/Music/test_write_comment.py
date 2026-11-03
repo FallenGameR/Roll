@@ -29,7 +29,7 @@ writer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(writer)
 ROOT = (Path(os.environ["ROLL_WRITER_TEST_DIRECTORY"]).resolve()
         if "ROLL_WRITER_TEST_DIRECTORY" in os.environ else None)
-COMMENT = ("A quiet road\n\nDescription: Soft strings\n\nEvidence: Measured\n\n"
+COMMENT = ("A quiet road\n\nDescription: Soft strings\n\nMeasurement: Measured\n\n"
            "Note: Uncertain\n\nSource: https://example.invalid/watch?v=abc")
 
 
@@ -108,7 +108,7 @@ class WriterTests(unittest.TestCase):
                 self.assertIn("Source: https://example.invalid/watch?v=abc", result["after"])
 
     def test_omitted_fields_and_unknown_section_exactly_preserved(self):
-        comment = COMMENT.replace("\n\nEvidence:", "\n\nProvenance:   keep RAW  \n\nEvidence:")
+        comment = COMMENT.replace("\n\nMeasurement:", "\n\nProvenance:   keep RAW  \n\nMeasurement:")
         original = self.fixture(comment=comment)
         result = self.run_record(self.record({"Situation": "Лесная дорога"}))
         self.assert_preserved(original, result)
@@ -116,16 +116,16 @@ class WriterTests(unittest.TestCase):
 
     def test_null_empty_clear_optional_source_remains(self):
         original = self.fixture()
-        result = self.run_record(self.record({"Note": None, "Evidence": "", "Description": ""}))
+        result = self.run_record(self.record({"Note": None, "Measurement": "", "Description": ""}))
         self.assert_preserved(original, result)
         self.assertEqual("A quiet road\n\nSource: https://example.invalid/watch?v=abc", result["after"])
 
     def test_flat_comment_and_insert_missing_sections(self):
         comment = "Road | Source: https://example.invalid | Custom: KEEP"
         original = self.fixture(comment=comment)
-        result = self.run_record(self.record({"Description": "Струнные", "Evidence": "Замер", "Note": "Оговорка"}))
+        result = self.run_record(self.record({"Description": "Струнные", "Measurement": "Замер", "Note": "Оговорка"}))
         self.assert_preserved(original, result)
-        self.assertEqual("Road | Description: Струнные | Evidence: Замер | Note: Оговорка"
+        self.assertEqual("Road | Description: Струнные | Measurement: Замер | Note: Оговорка"
                          " | Source: https://example.invalid | Custom: KEEP", result["after"])
 
     def test_crlf_separator_is_preserved(self):
@@ -213,44 +213,82 @@ class WriterTests(unittest.TestCase):
             "YT: RPG | D&D Ambience - Windmill in the Countryside",
             "Огонь | вода",
         )
-        for evidence in values:
-            with self.subTest(evidence=evidence):
-                comment = ("Road\n\nDescription: Strings\n\nEvidence: " + evidence
+        for measurement in values:
+            with self.subTest(measurement=measurement):
+                comment = ("Road\n\nDescription: Strings\n\nMeasurement: " + measurement
                            + "\n\nSource: https://example.invalid")
                 original = self.fixture(comment=comment)
                 result = self.run_record(self.record({"Situation": "Лесная дорога"}))
                 self.assert_preserved(original, result)
-                self.assertIn("\n\nEvidence: " + evidence, result["after"])
+                self.assertIn("\n\nMeasurement: " + measurement, result["after"])
                 original = self.fixture()
-                result = self.run_record(self.record({"Evidence": evidence}))
+                result = self.run_record(self.record({"Measurement": measurement}))
                 self.assert_preserved(original, result)
-                self.assertIn("\n\nEvidence: " + evidence, result["after"])
+                self.assertIn("\n\nMeasurement: " + measurement, result["after"])
 
     def test_flat_comment_splits_only_labelled_pipe_boundaries(self):
-        comment = ("Road | open sky | Description: Strings | Evidence: YT: RPG | D&D Ambience"
+        comment = ("Road | open sky | Description: Strings | Measurement: YT: RPG | D&D Ambience"
                    " | Custom: preserve | plain text | Source: https://example.invalid")
         original = self.fixture(comment=comment)
-        result = self.run_record(self.record({"Evidence": "YT: Земля | Гул землетрясения"}))
+        result = self.run_record(self.record({"Measurement": "YT: Земля | Гул землетрясения"}))
         self.assert_preserved(original, result)
         self.assertEqual("Road | open sky | Description: Strings"
-                         " | Evidence: YT: Земля | Гул землетрясения"
+                         " | Measurement: YT: Земля | Гул землетрясения"
                          " | Custom: preserve | plain text | Source: https://example.invalid",
                          result["after"])
 
     def test_paragraph_comments_do_not_split_any_embedded_pipes(self):
-        comment = ("Road\n\nDescription: Strings\n\nEvidence: A title | Note: a subtitle"
+        comment = ("Road\n\nDescription: Strings\n\nMeasurement: A title | Note: a subtitle"
                    "\n\nSource: https://example.invalid")
         original = self.fixture(comment=comment)
         result = self.run_record(self.record({"Situation": "Лесная дорога"}))
         self.assert_preserved(original, result)
-        self.assertIn("Evidence: A title | Note: a subtitle", result["after"])
+        self.assertIn("Measurement: A title | Note: a subtitle", result["after"])
+
+    def test_legacy_evidence_replaced_in_place_by_measurement(self):
+        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
+        for separator in ("\n\n", " | "):
+            with self.subTest(separator=separator):
+                original = self.fixture(comment=comment.replace("\n\n", separator))
+                result = self.run_record(self.record({"Measurement": "Замер: 120 с"}))
+                self.assert_preserved(original, result)
+                self.assertEqual(separator.join((
+                    "A quiet road", "Description: Soft strings", "Measurement: Замер: 120 с",
+                    "Note: Uncertain", "Source: https://example.invalid/watch?v=abc")),
+                    result["after"])
+
+    def test_legacy_evidence_cleared_by_empty_measurement(self):
+        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
+        original = self.fixture(comment=comment)
+        result = self.run_record(self.record({"Measurement": ""}))
+        self.assert_preserved(original, result)
+        self.assertNotIn("Evidence", result["after"])
+        self.assertEqual("A quiet road\n\nDescription: Soft strings\n\nNote: Uncertain"
+                         "\n\nSource: https://example.invalid/watch?v=abc", result["after"])
+
+    def test_legacy_evidence_dropped_when_measurement_already_present(self):
+        comment = COMMENT.replace("\n\nNote:", "\n\nEvidence: YT: old words\n\nNote:")
+        original = self.fixture(comment=comment)
+        result = self.run_record(self.record({"Measurement": "Новый замер"}))
+        self.assert_preserved(original, result)
+        self.assertNotIn("Evidence", result["after"])
+        self.assertIn("\n\nMeasurement: Новый замер\n\nNote:", result["after"])
+
+    def test_legacy_evidence_untouched_by_other_fields_and_not_writable(self):
+        comment = COMMENT.replace("Measurement: Measured", "Evidence: YT: old words")
+        original = self.fixture(comment=comment)
+        result = self.run_record(self.record({"Description": "Струнные"}))
+        self.assert_preserved(original, result)
+        self.assertIn("\n\nEvidence: YT: old words\n\n", result["after"])
+        result = self.run_record(self.record({"Evidence": "x"}))
+        self.assertEqual("error", result["status"], result)
 
     def test_pipe_section_injection_remains_refused(self):
         for value in ("Title | Source: replaced", "Title | Unknown: injected",
                       "Title | Description : malformed", "Title | note: injected"):
             with self.subTest(value=value):
                 original = self.fixture()
-                result = self.run_record(self.record({"Evidence": value}))
+                result = self.run_record(self.record({"Measurement": value}))
                 self.assertEqual("error", result["status"], result)
                 self.assertEqual(original, self.path.read_bytes())
 

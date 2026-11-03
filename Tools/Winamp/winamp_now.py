@@ -22,6 +22,9 @@ IPC_SETPLAYLISTPOS = 121
 IPC_SETVOLUME = 122          # 0-255, либо -666 чтобы узнать текущую
 VOLUME_QUERY = -666          # -1 здесь не запрос, а попытка что-то выставить
 IPC_GETLISTLENGTH = 124
+IPC_DELETE = 101             # очистить список
+IPC_PLAYFILEW = 1100         # через WM_COPYDATA: добавить файл в конец списка
+WM_COPYDATA = 0x004A
 PROCESS_VM_READ = 0x0010
 PROCESS_QUERY_INFORMATION = 0x0400
 
@@ -91,6 +94,32 @@ def playlist_length():
     """Сколько треков в списке - один дешёвый вызов, без чтения имён."""
     hwnd = find_window()
     return ipc(hwnd, 0, IPC_GETLISTLENGTH) if hwnd else 0
+
+
+class COPYDATASTRUCT(ctypes.Structure):
+    _fields_ = [("dwData", ctypes.c_size_t), ("cbData", wt.DWORD), ("lpData", ctypes.c_void_p)]
+
+
+def load(paths, play=True):
+    """Заменяет список плеера этими файлами и, если надо, играет с первого.
+
+    Список чистит IPC_DELETE, а файлы добавляются по одному через WM_COPYDATA
+    с IPC_PLAYFILEW: строка лежит в нашей памяти, и Windows сама копирует её
+    плееру. Указатель напрямую, как у чтения, тут не годится.
+    """
+    hwnd = find_window()
+    if not hwnd:
+        return False
+    ipc(hwnd, 0, IPC_DELETE)
+    for path in paths:
+        buf = ctypes.create_unicode_buffer(path)
+        cds = COPYDATASTRUCT(IPC_PLAYFILEW, ctypes.sizeof(buf),
+                             ctypes.cast(buf, ctypes.c_void_p))
+        user32.SendMessageW(hwnd, WM_COPYDATA, 0, ctypes.addressof(cds))
+    if play and paths:
+        ipc(hwnd, 0, IPC_SETPLAYLISTPOS)
+        user32.SendMessageW(hwnd, WM_COMMAND, COMMANDS["play"], 0)
+    return True
 
 
 def playlist(limit=5000):

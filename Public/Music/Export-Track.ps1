@@ -80,9 +80,9 @@ function Export-Track {
                 @{Name = 'Scene'; Expression = { $_.Scene -join ';' } },
                 @{Name = 'Game'; Expression = { $_.Game -join ';' } },
                 @{Name = 'Type'; Expression = { $_.Type -join ';' } },
-                Situation, Description, Evidence, Note, Source, Path |
+                Situation, Description, Measurement, Note, Source, Path |
             Export-Csv -LiteralPath $Path -NoTypeInformation -Encoding utf8BOM
-        # utf8BOM, а не UTF8: Description и Evidence содержат кириллицу,
+        # utf8BOM, а не UTF8: Description и Measurement содержат кириллицу,
         # и без BOM Excel открывает файл в ANSI, показывая кракозябры.
         # Import-Csv и Import-Track читают BOM без проблем.
 

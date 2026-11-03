@@ -1,7 +1,7 @@
 function Set-TrackText {
     <#
     .SYNOPSIS
-        Safely patches only Situation, Description, Evidence and Note.
+        Safely patches only Situation, Description, Measurement and Note.
     .DESCRIPTION
         Dry-run by default; -Apply is required to write. PatchPath is a UTF-8
         JSON array of records:
@@ -12,10 +12,14 @@ function Set-TrackText {
         The expected hash is SHA256 of the exact raw comment encoded as UTF-8,
         without trimming, newline normalization or BOM. Every record requires
         it, including dry runs. Omitted fields are unchanged. Null or empty
-        strings remove Description, Evidence or Note; Situation cannot be
+        strings remove Description, Measurement or Note; Situation cannot be
         cleared. Values must be single paragraphs without "| Label:" section
         injection. Literal "|" inside prose or titles is allowed.
         Source and well-formed unknown sections are preserved verbatim.
+
+        Measurement used to be called Evidence. Writing Measurement into a
+        comment that still has an "Evidence:" section replaces that section
+        in place under the new label; clearing Measurement removes either.
 
         Supports exactly one TXXX:comment or one COMM comment in ID3v2.3/2.4.
         Ambiguous/missing comments, multi-value text, malformed sections,

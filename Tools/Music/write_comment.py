@@ -23,12 +23,17 @@ from contextlib import contextmanager
 from mutagen.id3 import ID3
 
 
-FIELDS = ("Situation", "Description", "Evidence", "Note")
-KNOWN = (*FIELDS, "Source")
+FIELDS = ("Situation", "Description", "Measurement", "Note")
+# Evidence - прежнее имя Measurement. Пока библиотека не переписана, такую
+# секцию надо узнавать: читать как известную, а при записи Measurement
+# менять на месте, не оставляя двух секций с замером.
+LEGACY = {"Measurement": "Evidence"}
+KNOWN = ("Situation", "Description", "Measurement", "Evidence", "Note", "Source")
 PARAGRAPH_SEPARATOR = re.compile(r"(?:\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))+")
 PIPE_SEPARATOR = re.compile(r"[ \t]*\|[ \t]*(?=[^\W\d][\w -]*:)", re.UNICODE)
 LABEL = re.compile(r"^([^\W\d][\w -]*):[ \t]*", re.UNICODE)
-STRUCTURAL_LABEL = re.compile(r"^\s*(?:Situation|Description|Evidence|Note|Source)\s*:", re.IGNORECASE)
+STRUCTURAL_LABEL = re.compile(r"^\s*(?:Situation|Description|Measurement|Evidence|Note|Source)\s*:",
+                              re.IGNORECASE)
 
 
 def sha256(value):
@@ -134,7 +139,7 @@ def parse_sections(comment):
 
 def patch_comment(comment, fields):
     if not isinstance(fields, dict) or not fields or set(fields) - set(FIELDS):
-        raise ValueError("fields must contain only Situation, Description, Evidence, Note")
+        raise ValueError("fields must contain only Situation, Description, Measurement, Note")
     sections = parse_sections(comment)
     default_sep = next((section["sep"] for section in sections[1:]), "\n\n")
     for name, value in fields.items():
@@ -148,11 +153,17 @@ def patch_comment(comment, fields):
         if name == "Situation" and STRUCTURAL_LABEL.match(value):
             raise ValueError("Situation cannot start with a section label")
         existing = next((s for s in sections if s["name"] == name), None)
+        legacy = next((s for s in sections if s["name"] == LEGACY.get(name)), None)
         if value is None or not value.strip():
-            if existing:
-                sections.remove(existing)
+            for section in (existing, legacy):
+                if section:
+                    sections.remove(section)
         elif existing:
             existing["text"] = existing["prefix"] + value
+            if legacy:
+                sections.remove(legacy)
+        elif legacy:
+            legacy.update(name=name, prefix=name + ": ", text=name + ": " + value)
         else:
             section = {"name": name, "text": name + ": " + value,
                        "prefix": name + ": ", "sep": default_sep}

@@ -195,15 +195,16 @@ function ConvertTo-GenreTagString {
 
 .DESCRIPTION
     Comment format written by the annotation pipeline is:
-      <situation> | Description: <description> | Evidence: <evidence>
+      <situation> | Description: <description> | Measurement: <measurement>
       | Note: <note> | Source: <url>
-    Only the situation is mandatory. Evidence records which sources the
-    description was built from (acoustic measurement, YouTube comments,
-    web credits) and Note carries caveats such as "the scene is not
-    documented anywhere" - both were added when descriptions started
-    being derived from real sources instead of guesswork, and both are
-    optional. The trailing "| Source: <url>" segment is occasionally
-    missing, in which case Source comes back as $null.
+    Only the situation is mandatory. Measurement holds the numbers of the
+    acoustic measurement only; what YouTube comments or web credits say
+    goes into Description and Note. Note carries caveats such as "the
+    scene is not documented anywhere". Measurement used to be called
+    Evidence and mixed both kinds of sources; the old label is still read
+    into Measurement until the library is rewritten. The trailing
+    "| Source: <url>" segment is occasionally missing, in which case
+    Source comes back as $null.
 #>
 function ConvertTo-CommentParts {
     param(
@@ -214,7 +215,7 @@ function ConvertTo-CommentParts {
 
     $situation = $Comment
     $description = $null
-    $evidence = $null
+    $measurement = $null
     $note = $null
     $source = $null
 
@@ -235,9 +236,13 @@ function ConvertTo-CommentParts {
         $rest = $tail[0]
         if ($tail.Count -eq 2) { $note = $tail[1].Trim() }
 
-        $tail = $rest -split '\s*\|\s*Evidence:\s*', 2
-        $rest = $tail[0]
-        if ($tail.Count -eq 2) { $evidence = $tail[1].Trim() }
+        # Evidence - прежнее имя Measurement; пока библиотеку не
+        # переписали, старая метка читается в то же свойство.
+        foreach ($label in 'Measurement', 'Evidence') {
+            $tail = $rest -split "\s*\|\s*${label}:\s*", 2
+            $rest = $tail[0]
+            if ($tail.Count -eq 2 -and -not $measurement) { $measurement = $tail[1].Trim() }
+        }
 
         $description = $rest.Trim()
     }
@@ -245,7 +250,7 @@ function ConvertTo-CommentParts {
     [PSCustomObject]@{
         Situation   = $situation
         Description = $description
-        Evidence    = $evidence
+        Measurement = $measurement
         Note        = $note
         Source      = $source
     }

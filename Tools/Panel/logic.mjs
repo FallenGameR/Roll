@@ -17,6 +17,7 @@ const DICTATION_LOG = join(DICTATION_DIR, "dictation.log");
 const CLEARED = join(DICTATION_DIR, "history-cleared.txt");
 const WINAMP_PORT = 8731;
 const WINAMP_URL = `http://127.0.0.1:${WINAMP_PORT}/`;
+const WINAMP_LOG = join(process.env.LOCALAPPDATA ?? "", "Roll", "winamp-start.log");
 
 export class PanelError extends Error {
     constructor(code, message) { super(message); this.code = code; }
@@ -110,18 +111,29 @@ export async function stopDictation() {
 
 export async function startWinamp() {
     if (!(await winampUp())) {
-        // Start-WinampPlaylist держит сервер на переднем плане, поэтому его
-        // запускает отдельный скрытый pwsh, отвязанный от расширения: так
-        // страница переживает перезапуск расширения.
-        const child = spawn("pwsh.exe", ["-NoProfile", "-WindowStyle", "Hidden", "-Command",
-            `Import-Module '${ROLL}'; Start-WinampPlaylist -Port ${WINAMP_PORT} -NoBrowser`],
-            { detached: true, stdio: "ignore", windowsHide: true });
+        // Start-WinampPlaylist держит сервер на переднем плане, поэтому он
+        // живёт в отдельном скрытом pwsh, отвязанном от расширения: так
+        // страница переживает перезапуск расширения. Запуск идёт через
+        // `cmd /c start`: pwsh из Microsoft Store, порождённый напрямую с
+        // detached, выходит с кодом 0, не выполнив команду. Перенаправление
+        // `*>>` в такой строке тоже ломало запуск, поэтому лог пишет
+        // Start-Transcript; хвост лога показывается при ошибке.
+        await writeFile(WINAMP_LOG, "", "utf8");
+        const command = `Start-Transcript -Path '${WINAMP_LOG}' | Out-Null; Import-Module '${ROLL}'; ` +
+            `Start-WinampPlaylist -Port ${WINAMP_PORT} -NoBrowser`;
+        const child = spawn("cmd.exe",
+            [`/d /s /c "start "" /min pwsh.exe -NoProfile -WindowStyle Hidden -Command "${command}""`],
+            { detached: true, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: true });
+        child.on("error", (e) => writeFile(WINAMP_LOG, `spawn: ${e.message}\n`, { flag: "a" }));
         child.unref();
         for (let i = 0; i < 40 && !(await winampUp()); i++) {
             await new Promise((r) => setTimeout(r, 500));
         }
         if (!(await winampUp())) {
-            throw new PanelError("winamp_start_failed", "Страница Winamp не поднялась за 20 секунд.");
+            let tail = "";
+            try { tail = (await readFile(WINAMP_LOG, "utf8")).trim().split(/\r?\n/).slice(-5).join("\n"); } catch { }
+            throw new PanelError("winamp_start_failed",
+                "Страница Winamp не поднялась за 20 секунд." + (tail ? `\n${tail}` : ` Лог: ${WINAMP_LOG}`));
         }
     }
     return status();
@@ -141,12 +153,13 @@ export function openWinampBrowser() {
     return status();
 }
 
-// Вкладка встроенного браузера приложения.
+// Вкладка встроенного браузера приложения. По `#app` страница снимает с себя
+// зум приложения и показывается в масштабе 100%, как в обычном браузере.
 export async function openWinampTab({ session }) {
     await session.rpc.canvas.open({
         canvasId: "browser",
         instanceId: "roll-winamp",
-        input: { url: WINAMP_URL, title: "Плейлист Winamp", placement: { focus: true } },
+        input: { url: `${WINAMP_URL}#app`, title: "Плейлист Winamp", placement: { focus: true } },
     });
     return status();
 }
