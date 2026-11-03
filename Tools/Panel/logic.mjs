@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 const ROLL = join(dirname(realpathSync(fileURLToPath(import.meta.url))), "..", "..", "Roll.psd1");
 const DICTATION_DIR = join(process.env.LOCALAPPDATA ?? "", "Roll", "dictation");
 const DICTATION_LOG = join(DICTATION_DIR, "dictation.log");
+const DICTATION_STATE = join(DICTATION_DIR, "state.json");
 // Очистка истории не трогает лог: он нужен для отладки. В файл пишется
 // момент очистки, и всё, что раньше, пульт больше не показывает.
 const CLEARED = join(DICTATION_DIR, "history-cleared.txt");
@@ -77,6 +78,12 @@ export async function phrases(limit = 300) {
         }
     } catch { /* лога ещё нет */ }
     return found;
+}
+
+// Текущая стадия диктовки из state.json, который пишет ptt.py.
+export async function dictationState() {
+    try { return { ...JSON.parse(await readFile(DICTATION_STATE, "utf8")), now: Date.now() / 1000 }; }
+    catch { return { stage: "", now: Date.now() / 1000 }; }
 }
 
 export async function clearPhrases() {
@@ -184,6 +191,7 @@ export const routes = {
     "/api/dictation/start": () => startDictation(),
     "/api/dictation/stop": () => stopDictation(),
     "/api/dictation/log": () => phrases(),
+    "/api/dictation/state": () => dictationState(),
     "/api/dictation/clear": () => clearPhrases(),
     "/api/winamp/start": () => startWinamp(),
     "/api/winamp/stop": () => stopWinamp(),

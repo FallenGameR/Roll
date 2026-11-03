@@ -6,6 +6,7 @@ Managed by Start-Dictation / Stop-Dictation / Get-Dictation from the Roll module
 import argparse
 import ctypes
 import ctypes.wintypes as w
+import json
 import logging
 import os
 import queue
@@ -55,6 +56,30 @@ except OSError:
 
 log.info("Loading model %s", MODEL)
 
+STATE_PATH = os.path.join(os.path.dirname(args.log), "state.json")
+last_run = {}
+
+
+def set_state(stage, **extra):
+    """Текущая стадия для пульта: loading, ready, recording, preparing, decoding, typing.
+
+    Пульт опрашивает файл раз в полсекунду и сам считает секундомер от since.
+    Пишем через временный файл и os.replace, иначе пульт может прочитать
+    половину JSON.
+    """
+    data = {"stage": stage, "since": time.time(), "last": last_run}
+    data.update(extra)
+    tmp = STATE_PATH + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, STATE_PATH)
+    except OSError:
+        pass  # пульт - не повод ронять диктовку
+
+
+set_state("loading", model=MODEL)
+
 
 def disable_power_throttling():
     # На батарее Windows включает EcoQoS для фоновых процессов без окна, и
@@ -76,6 +101,7 @@ def disable_power_throttling():
 disable_power_throttling()
 model = WhisperModel(MODEL, device="cpu", compute_type="int8")
 log.info("Ready. Hold the Copilot key to dictate.")
+set_state("ready")
 winsound.Beep(1200, 80)
 
 commands = queue.Queue()
@@ -101,6 +127,7 @@ def recorder():
                                 callback=lambda data, *_: chunks.append(data.copy()))
         stream.start()
         log.info("Recording...")
+        set_state("recording")
         chime("Speech On.wav")
         while commands.get() != "stop":
             pass
@@ -109,19 +136,46 @@ def recorder():
         duration = time.time() - start
         if held["cancelled"] or duration < MIN_SECONDS or not chunks:
             log.info("Skipped (cancelled=%s, %.1fs)", held["cancelled"], duration)
+            set_state("ready", skipped="отменено" if held["cancelled"] else "слишком коротко")
             continue
         chime("Speech Off.wav")
-        transcribe(np.concatenate(chunks).flatten())
+        transcribe(np.concatenate(chunks).flatten(), duration)
 
 
-def transcribe(audio):
+def transcribe(audio, recorded):
+    seconds = len(audio) / SR
+    set_state("preparing", audio=round(seconds, 1))
     t = time.time()
-    segments, _ = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
-                                   vad_filter=True, beam_size=5)
-    text = " ".join(s.text.strip() for s in segments).strip()
-    log.info("%.1fs audio -> %.1fs: %s", len(audio) / SR, time.time() - t, text)
+    # transcribe() сразу отрезает тишину (VAD) и считает признаки звука, а
+    # сами слова декодирует лениво, по сегменту за раз. Поэтому время до
+    # возврата - подготовка, а прогресс декодирования виден по концу
+    # каждого сегмента.
+    segments, info = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
+                                      vad_filter=True, beam_size=5)
+    prepared = time.time() - t
+    speech = getattr(info, "duration_after_vad", seconds) or seconds
+    set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1), progress=0)
+    t = time.time()
+    parts = []
+    for s in segments:
+        parts.append(s.text.strip())
+        set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1),
+                  progress=min(1.0, s.end / seconds) if seconds else 1.0,
+                  since=t)
+    decoded = time.time() - t
+    text = " ".join(parts).strip()
+    log.info("%.1fs audio -> %.1fs: %s", seconds, prepared + decoded, text)
+    typed = 0.0
     if text:
+        set_state("typing", chars=len(text))
+        t = time.time()
         keyboard.write(text + " ")
+        typed = time.time() - t
+    last_run.clear()
+    last_run.update(at=time.time(), record=round(recorded, 1), prepare=round(prepared, 1),
+                    decode=round(decoded, 1), type=round(typed, 1), chars=len(text),
+                    speech=round(speech, 1))
+    set_state("ready", skipped="" if text else "тишина")
 
 
 class KBDLLHOOKSTRUCT(ctypes.Structure):
