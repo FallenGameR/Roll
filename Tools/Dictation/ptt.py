@@ -1,4 +1,4 @@
-"""Push-to-talk dictation: hold the Copilot key, speak, release - text is typed at the cursor.
+"""Push-to-talk dictation: hold the Copilot or Menu key, speak, release - text is typed at the cursor.
 
 Usage: pythonw ptt.py [model] [--log PATH] [--encoder gpu|npu|off] [--test]
 Managed by Start-Dictation / Stop-Dictation / Get-Dictation from the Roll module.
@@ -17,12 +17,19 @@ import time
 import wave
 import winsound
 
+# pythonw не даёт процессу консоли, и sys.stdout/stderr равны None. Прогресс
+# скачивания из huggingface_hub (tqdm) пишет в stderr и падает на первом
+# запуске, а OpenVINO из-за этого откатывается на процессор.
+for _name in ("stdout", "stderr"):
+    if getattr(sys, _name) is None:
+        setattr(sys, _name, open(os.devnull, "w", encoding="utf-8"))
+
 import keyboard
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
-from ov_encoder import attach_openvino_encoder
+from ov_encoder import attach_openvino_encoder, pick_device
 
 parser = argparse.ArgumentParser()
 parser.add_argument("model", nargs="?", default="turbo")
@@ -35,11 +42,14 @@ parser.add_argument("--beam", type=int, default=5,
                     help="beam_size: сколько вариантов текста модель держит одновременно. "
                          "1 быстрее всего на 3%%: у turbo время уходит на кодировщик звука")
 parser.add_argument("--threads", type=int, default=os.cpu_count() or 0,
-                    help="cpu_threads для CTranslate2; по умолчанию все ядра. Замер bench.py "
-                         "на 8 ядрах: все ядра быстрее библиотечных 4 потоков на 6%%")
-parser.add_argument("--encoder", default="gpu", choices=["gpu", "npu", "off"],
+                    help="cpu_threads для CTranslate2; по умолчанию все логические ядра, "
+                         "Start-Dictation передаёт число физических. Замер bench.py: на 8 "
+                         "ядрах все ядра быстрее библиотечных 4 потоков на 6%%, на i9-10900K "
+                         "10 потоков быстрее 20 на 20%%")
+parser.add_argument("--encoder", default="auto", choices=["auto", "gpu", "npu", "off"],
                     help="где считать кодировщик Whisper: OpenVINO на видеокарте или NPU, "
-                         "off - CTranslate2 на процессоре, как до ноября 2026. См. ov_encoder.py")
+                         "off - CTranslate2 на процессоре, auto - выбрать по железу, см. "
+                         "pick_device в ov_encoder.py")
 args = parser.parse_args()
 
 MODEL = args.model
@@ -49,7 +59,8 @@ SR = 16000
 PROMPT = "Сделай commit и открой pull request в GitHub, потом запусти тесты в PowerShell."
 
 VK_F23 = 0x86  # Copilot key sends Win+Shift+F23
-HOTKEYS = {VK_F23}
+VK_APPS = 0x5D  # Menu key: sits where the Copilot key is on keyboards without one
+HOTKEYS = {VK_F23, VK_APPS}
 COPILOT_MODIFIERS = {0x5B, 0x10, 0xA0, 0xA1}  # Win, Shift — repeated by the Copilot key while held
 KEYDOWN = {0x100, 0x104}
 LLKHF_INJECTED = 0x10
@@ -119,8 +130,9 @@ def disable_power_throttling():
 
 disable_power_throttling()
 model = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=args.threads)
-encoder = attach_openvino_encoder(model, args.encoder, log)
-log.info("Ready. Hold the Copilot key to dictate (encoder %s, beam %d, threads %s).",
+wanted = pick_device(log) if args.encoder == "auto" else args.encoder
+encoder = attach_openvino_encoder(model, wanted, log)
+log.info("Ready. Hold the Copilot key or Menu key to dictate (encoder %s, beam %d, threads %s).",
          encoder, args.beam, args.threads or "default")
 set_state("ready")
 winsound.Beep(1200, 80)

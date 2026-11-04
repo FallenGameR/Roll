@@ -32,6 +32,33 @@ def _download():
         return snapshot_download(MODEL_REPO, allow_patterns=FILES)
 
 
+def pick_device(log):
+    """Выбор для --encoder auto: gpu, npu или off по железу, без замеров.
+
+    Видеокарта Arc есть в Core Ultra, на ней кодировщик в разы быстрее
+    процессора. Старая встроенная графика UHD считает его медленнее
+    процессора: на i9-10900K с UHD 630 окно уходит за 7.1 с против 6.1 с у
+    CTranslate2 на 10 ядрах, поэтому такая видеокарта не в счёт. Без Arc
+    берём NPU, если он есть, иначе процессор.
+    """
+    try:
+        import openvino as ov
+        core = ov.Core()
+        names = {d: core.get_property(d, "FULL_DEVICE_NAME") for d in core.available_devices}
+    except Exception as exc:  # noqa: BLE001
+        log.info("Encoder auto: OpenVINO unavailable (%s), using CPU", exc)
+        return "off"
+    gpus = [n for d, n in names.items() if d.startswith("GPU") and "arc" in n.lower()]
+    if gpus:
+        choice = "gpu"
+    elif any(d.startswith("NPU") for d in names):
+        choice = "npu"
+    else:
+        choice = "off"
+    log.info("Encoder auto: %s from %s", choice, "; ".join(f"{d}={n}" for d, n in names.items()))
+    return choice
+
+
 def attach_openvino_encoder(model, device, log, cache_root=None):
     """Возвращает имя устройства, на котором работает кодировщик: GPU, NPU или CPU."""
     if not device or device.lower() == "off":

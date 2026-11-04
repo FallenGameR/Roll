@@ -24,13 +24,17 @@ export class PanelError extends Error {
     constructor(code, message) { super(message); this.code = code; }
 }
 
+// Ошибка уходит в stderr одним текстом исключения: иначе pwsh рисует её
+// рамкой "Line | ~~~" с ANSI-цветом, и на странице это выглядит кракозябрами.
 function pwsh(command, timeout = 240_000) {
     return new Promise((resolve, reject) => {
         execFile("pwsh.exe", ["-NoProfile", "-NonInteractive", "-Command",
-            `[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ${command}`],
+            "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); " +
+            "$PSStyle.OutputRendering = 'PlainText'; " +
+            `try { ${command} } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`],
             { windowsHide: true, timeout, encoding: "utf8" },
             (error, stdout, stderr) => {
-                if (error) reject(new Error((stderr || error.message).trim()));
+                if (error) reject(new Error((stderr || error.message).replace(/\x1b\[[0-9;]*m/g, "").trim()));
                 else resolve(stdout.trim());
             });
     });

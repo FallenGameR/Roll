@@ -12,7 +12,15 @@
     font-family: var(--font-sans, "Segoe UI", sans-serif);
     font-size: var(--text-body-medium, 14px);
     line-height: var(--leading-body-medium, 20px);
+    /* Страница ровно в высоту окна: журнал диктовки забирает остаток и
+       прокручивается сам, а разбор последней фразы стоит внизу экрана. */
+    box-sizing: border-box;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
+  section { flex: none; }
+  section.fill { flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; padding-bottom: 6px; }
   section {
     border: 1px solid var(--border-color-default, #d0d7de);
     border-radius: 8px;
@@ -47,15 +55,17 @@
   .phrase { margin-top: 10px; color: var(--text-color-muted, #666); font-size: 13px; }
   .stage { margin-left: 4px; font-size: 12px; line-height: 16px; height: 32px;
            color: var(--text-color-muted, #666);
-           flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center;
+           flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center;
            align-items: flex-end; text-align: right;
            font-variant-numeric: tabular-nums; }
-  .stage > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .stage > span { white-space: nowrap; }
+  /* Стадия всегда справа от кнопок, без переноса на свою строку. */
+  .row.nowrap { flex-wrap: nowrap; }
+  .row.nowrap > button { flex: none; }
   .stage .now-recording { color: var(--true-color-blue, #0969da); }
-  .last { margin-top: 22px; font-size: 12px; color: var(--text-color-muted, #666); text-align: right; opacity: .6;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .last { flex: none; margin-top: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text-color-muted, #666); text-align: right; opacity: .6; }
   .error { color: var(--true-color-red, #cf222e); margin-top: 8px; font-size: 13px; }
-  .log { margin-top: 10px; max-height: 360px; overflow: auto; border-top: 1px solid var(--border-color-default, #d0d7de); }
+  .log { margin-top: 10px; flex: 1 1 0; min-height: 0; overflow: auto; border-top: 1px solid var(--border-color-default, #d0d7de); }
   .log-item { display: flex; gap: 10px; padding: 6px 2px; border-bottom: 1px solid var(--border-color-default, #d0d7de); cursor: pointer; }
   .log-item:hover { background: var(--bb-11-10, rgba(127,127,127,.08)); }
   .log-time { color: var(--text-color-muted, #666); font-size: 12px; flex: none; width: 34px; white-space: nowrap; }
@@ -107,9 +117,9 @@
   </div>
   <pre id="r-out"></pre>
 </section>
-<section>
+<section class="fill">
   <h2><span class="dot" id="d-dot"></span>Диктовка <span class="state" id="d-state">...</span></h2>
-  <div class="row">
+  <div class="row nowrap">
     <button id="d-start">Запустить</button>
     <button id="d-stop">Остановить</button>
     <button id="d-clear" title="Очистить историю">Очистить</button>
@@ -165,11 +175,13 @@
         const total = (l.record || 0) + (l.prepare || 0) + (l.decode || 0) + (l.type || 0);
         const n = l.chars, tail = n % 10, teen = n % 100 >= 11 && n % 100 <= 14;
         const chars = `${n} ${teen || tail === 0 || tail >= 5 ? "знаков" : tail === 1 ? "знак" : "знака"}`;
-        // Печать почти всегда мгновенная; показываем, только если заметна.
+        // Подготовка и печать почти всегда мгновенные; показываем, только
+        // если заметны, чтобы строка помещалась в одну.
         const typing = l.type >= 0.1 ? ` · печать ${f1(l.type)}с` : "";
-        lastBox.textContent = `запись ${f1(l.record)}с · подготовка ${f1(l.prepare)}с · ` +
+        const prepare = l.prepare >= 0.1 ? ` · подготовка ${f1(l.prepare)}с` : "";
+        lastBox.textContent = `запись ${f1(l.record)}с${prepare} · ` +
           `распознавание ${f1(l.decode)}с${typing} · всего ${Math.round(total)}с · ${chars}`;
-        lastBox.title = `последняя фраза; речи после отсечения тишины ${sec(l.speech ?? 0)}`;
+        lastBox.title = `${lastBox.textContent}\nпоследняя фраза; речи после отсечения тишины ${sec(l.speech ?? 0)}`;
         lastBox.hidden = false;
       } else lastBox.hidden = true;
     } catch { /* следующий опрос */ }
@@ -179,7 +191,7 @@
   function render(s) {
     dictationOn = s.dictation;
     $("d-dot").classList.toggle("on", s.dictation);
-    $("d-state").textContent = s.dictation ? "работает, держите кнопку Copilot" : "остановлена";
+    $("d-state").textContent = s.dictation ? "работает, держите кнопку Copilot или Menu" : "остановлена";
     $("d-start").disabled = busy || s.dictation;
     $("d-stop").disabled = busy || !s.dictation;
     if (s.lastPhrase !== lastPhrase) { lastPhrase = s.lastPhrase; loadLog(); }
