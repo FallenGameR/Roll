@@ -20,7 +20,9 @@
     flex-direction: column;
   }
   section { flex: none; }
-  section.fill { flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; padding-bottom: 6px; }
+  section.fill { flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; padding-bottom: 6px; margin-bottom: 0; }
+  body { padding-bottom: 6px; }
+  .error:empty { display: none; }
   section {
     border: 1px solid var(--border-color-default, #d0d7de);
     border-radius: 8px;
@@ -159,9 +161,9 @@
       const name = $("d-stage-name");
       name.textContent = STAGES[s.stage] ?? s.stage;
       name.className = `now-${s.stage}`;
-      // В покое под стадией видно, где считается кодировщик: после отката
-      // или сбоя OpenVINO там окажется процессор.
-      const where = { GPU: "на видеокарте", NPU: "на NPU", CPU: "на процессоре" }[s.encoder] ?? "";
+      // В покое под стадией видно, где считается кодировщик: CPU, GPU или
+      // NPU. После отката или сбоя OpenVINO там окажется CPU.
+      const where = ["GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
       let info = s.stage === "ready" ? where : sec(elapsed);
       if (s.stage === "decoding" && s.speech) info = `речь ${sec(s.speech)} · ${info}`;
       if (s.stage === "ready" && s.skipped && elapsed < 10) info = `пропущено: ${s.skipped}`;
