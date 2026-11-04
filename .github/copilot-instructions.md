@@ -101,3 +101,21 @@ CLI в главе 4.
 
 Описание модуля в `Description` манифеста перечисляет темы; новая тема
 дописывается и туда.
+
+## Пуш
+
+Репозиторий принадлежит `FallenGameR`, и Мастер пушит прямо в `main`,
+без pull request. Коммитить и пушить только по прямой просьбе.
+
+Приложение Copilot отдаёт своим процессам `GH_TOKEN` рабочей учётки
+`alexko_microsoft`, у которой нет прав на запись, поэтому простой
+`git push` получает 403. Учётка `FallenGameR` лежит в keyring `gh`,
+и её токен подставляют только в процесс, который пушит:
+
+```powershell
+$env:GH_TOKEN = gh auth token --user FallenGameR
+git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin main
+```
+
+Активную учётку `gh auth switch` не переключать: она общая для всех
+терминалов, а рабочие репозитории ходят под `alexko_microsoft`.
