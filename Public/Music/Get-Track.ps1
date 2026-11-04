@@ -14,7 +14,7 @@
       - Emotion   = what the listener feels, dark to light
                     (Anger/Fear/Sorrow/Reverence/Curiosity/Light)
       - Scene     = place and kind of scene as Group(Tag): Rest(Tavern),
-                    Rest(Peaceful), Travel, Urban(Town), Urban(Court),
+                    Rest(Peaceful), Road, Urban(Town), Urban(Court),
                     Mystic(Ritual), Mystic(Haunt), Dungeon(Ruins),
                     Dungeon(Underworld), Action(Investigation),
                     Action(Chase), Action(Stealth), Other. Required for

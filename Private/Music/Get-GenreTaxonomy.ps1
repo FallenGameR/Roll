@@ -15,7 +15,7 @@
       - Emotion, от тёмного к светлому: Anger, Fear, Sorrow, Reverence,
         Curiosity, Light. Ступеней нет, каждое семейство - один тег.
       - Scene, двойное имя Группа(Тег). Группы на панели идут так: Rest,
-        Travel, Urban, Mystic, Dungeon, Action, Other. Travel и Other -
+        Road, Urban, Mystic, Dungeon, Action, Other. Road и Other -
         одиночные теги без группы и пишутся без скобок. Scene обязателен
         у каждого трека, кроме Type Intro, Outro и Effect.
       - Game: Fantasy, Modern, SciFi.
@@ -50,7 +50,7 @@ $script:RollGenreTaxonomy = @{
     # Scene: где всё происходит и что это за сцена. Группа(Тег).
     'Rest(Tavern)'          = 'Scene'
     'Rest(Peaceful)'        = 'Scene'
-    'Travel'                = 'Scene'
+    'Road'                  = 'Scene'
     'Urban(Town)'           = 'Scene'
     'Urban(Court)'          = 'Scene'
     'Mystic(Ritual)'        = 'Scene'
@@ -109,7 +109,7 @@ $script:RollGenreCategoryOrder = @('Intensity', 'Emotion', 'Scene', 'Game', 'Typ
     подсказок в интерфейсе простановки тегов (Start-WinampPlaylist).
 
 .DESCRIPTION
-    Смысл значений разбирается в скилле music-picking, но скилл читает
+    Смысл значений разбирается в скилле music-library, но скилл читает
     ассистент, а Мастеру за разметкой нужна подсказка под курсором.
     Тексты лежат здесь же, где сами значения, чтобы список и пояснения
     к нему не разъезжались.
@@ -132,7 +132,7 @@ $script:RollGenreHelp = @{
     # Scene - где происходит и что это за сцена.
     'Rest(Tavern)'          = 'Трактир и застолье: музыка, которую в мире играют живые музыканты.'
     'Rest(Peaceful)'        = 'Привал и убежище: отряд переводит дух, никто не гонится.'
-    'Travel'                = 'Дорога и дикие места: переход по карте, обоз, лес, степь, горы. Оттенок дороги задают Intensity и Emotion.'
+    'Road'                  = 'Дорога и дикие места: переход по карте, обоз, лес, степь, горы.'
     'Urban(Town)'           = 'Город и жильё: улицы, кварталы, крепость изнутри, обжитое место.'
     'Urban(Court)'          = 'Двор, приём, переговоры: власть, этикет, интрига в разговоре.'
     'Mystic(Ritual)'        = 'Храм, обряд, освящённое место: то, что делают с намерением и по правилам.'

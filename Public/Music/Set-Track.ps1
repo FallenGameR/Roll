@@ -45,7 +45,7 @@
 
 .PARAMETER Scene
     Replaces the Scene values, written as Group(Tag): Rest(Tavern),
-    Rest(Peaceful), Travel, Urban(Town), Urban(Court), Mystic(Ritual),
+    Rest(Peaceful), Road, Urban(Town), Urban(Court), Mystic(Ritual),
     Mystic(Haunt), Dungeon(Ruins), Dungeon(Underworld),
     Action(Investigation), Action(Chase), Action(Stealth), Other.
     Required for every track except Type Intro, Outro and Effect.

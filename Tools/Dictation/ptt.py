@@ -85,9 +85,16 @@ def set_state(stage, **extra):
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, STATE_PATH)
     except OSError:
-        pass  # пульт - не повод ронять диктовку
+        return  # пульт - не повод ронять диктовку
+    # Пока пульт читает state.json, Windows не даёт его заменить; без повтора
+    # стадия застревала до следующей смены, например на "грузит модель".
+    for _ in range(20):
+        try:
+            os.replace(tmp, STATE_PATH)
+            return
+        except OSError:
+            time.sleep(0.02)
 
 
 set_state("loading", model=MODEL)
