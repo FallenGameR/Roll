@@ -1,6 +1,6 @@
 """Push-to-talk dictation: hold the Copilot key, speak, release - text is typed at the cursor.
 
-Usage: pythonw ptt.py [model] [--log PATH] [--test]
+Usage: pythonw ptt.py [model] [--log PATH] [--encoder gpu|npu|off] [--test]
 Managed by Start-Dictation / Stop-Dictation / Get-Dictation from the Roll module.
 """
 import argparse
@@ -14,12 +14,15 @@ import socket
 import sys
 import threading
 import time
+import wave
 import winsound
 
 import keyboard
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
+
+from ov_encoder import attach_openvino_encoder
 
 parser = argparse.ArgumentParser()
 parser.add_argument("model", nargs="?", default="turbo")
@@ -28,6 +31,15 @@ parser.add_argument("--log", default=os.path.join(
     "Roll", "dictation", "dictation.log"))
 parser.add_argument("--test", action="store_true",
                     help="let simulated key presses drive the hook and log hook events")
+parser.add_argument("--beam", type=int, default=5,
+                    help="beam_size: сколько вариантов текста модель держит одновременно. "
+                         "1 быстрее всего на 3%%: у turbo время уходит на кодировщик звука")
+parser.add_argument("--threads", type=int, default=os.cpu_count() or 0,
+                    help="cpu_threads для CTranslate2; по умолчанию все ядра. Замер bench.py "
+                         "на 8 ядрах: все ядра быстрее библиотечных 4 потоков на 6%%")
+parser.add_argument("--encoder", default="gpu", choices=["gpu", "npu", "off"],
+                    help="где считать кодировщик Whisper: OpenVINO на видеокарте или NPU, "
+                         "off - CTranslate2 на процессоре, как до ноября 2026. См. ov_encoder.py")
 args = parser.parse_args()
 
 MODEL = args.model
@@ -67,7 +79,7 @@ def set_state(stage, **extra):
     Пишем через временный файл и os.replace, иначе пульт может прочитать
     половину JSON.
     """
-    data = {"stage": stage, "since": time.time(), "last": last_run}
+    data = {"stage": stage, "since": time.time(), "last": last_run, "encoder": globals().get("encoder")}
     data.update(extra)
     tmp = STATE_PATH + ".tmp"
     try:
@@ -99,8 +111,10 @@ def disable_power_throttling():
 
 
 disable_power_throttling()
-model = WhisperModel(MODEL, device="cpu", compute_type="int8")
-log.info("Ready. Hold the Copilot key to dictate.")
+model = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=args.threads)
+encoder = attach_openvino_encoder(model, args.encoder, log)
+log.info("Ready. Hold the Copilot key to dictate (encoder %s, beam %d, threads %s).",
+         encoder, args.beam, args.threads or "default")
 set_state("ready")
 winsound.Beep(1200, 80)
 
@@ -139,7 +153,30 @@ def recorder():
             set_state("ready", skipped="отменено" if held["cancelled"] else "слишком коротко")
             continue
         chime("Speech Off.wav")
-        transcribe(np.concatenate(chunks).flatten(), duration)
+        audio = np.concatenate(chunks).flatten()
+        keep_recording(audio)
+        transcribe(audio, duration)
+
+
+RECORDINGS = os.path.join(os.path.dirname(args.log), "recordings")
+KEEP_RECORDINGS = 5
+
+
+def keep_recording(audio):
+    """Последние записи - для Tools\\Dictation\\bench.py: сравнивать настройки
+    распознавания надо на одном и том же голосе. Старше пятой удаляются."""
+    try:
+        os.makedirs(RECORDINGS, exist_ok=True)
+        name = os.path.join(RECORDINGS, time.strftime("%Y%m%d-%H%M%S") + ".wav")
+        with wave.open(name, "wb") as f:
+            f.setnchannels(1)
+            f.setsampwidth(2)
+            f.setframerate(SR)
+            f.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+        for old in sorted(os.listdir(RECORDINGS))[:-KEEP_RECORDINGS]:
+            os.remove(os.path.join(RECORDINGS, old))
+    except OSError as exc:
+        log.info("Recording not kept: %s", exc)
 
 
 def transcribe(audio, recorded):
@@ -152,7 +189,7 @@ def transcribe(audio, recorded):
     # Whisper разбирает звук окнами по 30 с и отдаёт сегменты только после
     # целого окна, а фраза почти всегда укладывается в одно окно.
     segments, info = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
-                                      vad_filter=True, beam_size=5)
+                                      vad_filter=True, beam_size=args.beam)
     prepared = time.time() - t
     speech = getattr(info, "duration_after_vad", seconds) or seconds
     set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1))
@@ -170,6 +207,9 @@ def transcribe(audio, recorded):
     last_run.update(at=time.time(), record=round(recorded, 1), prepare=round(prepared, 1),
                     decode=round(decoded, 1), type=round(typed, 1), chars=len(text),
                     speech=round(speech, 1))
+    global encoder
+    if "encode" not in vars(model):
+        encoder = "CPU"  # ov_encoder вернул штатный кодировщик после сбоя, пульт должен это видеть
     set_state("ready", skipped="" if text else "тишина")
 
 

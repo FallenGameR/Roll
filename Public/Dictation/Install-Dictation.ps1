@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Ставит окружение голосовой диктовки: venv с faster-whisper.
+    Ставит окружение голосовой диктовки: venv с faster-whisper и OpenVINO.
 
 .DESCRIPTION
     Создаёт venv в %LOCALAPPDATA%\Roll\dictation\venv и ставит туда пакеты из
@@ -8,7 +8,8 @@
     пакеты, -Force пересоздаёт venv с нуля.
 
     Модель whisper отдельно не качается: faster-whisper сам кладёт её в кеш
-    Hugging Face профиля при первом запуске Start-Dictation.
+    Hugging Face профиля при первом запуске Start-Dictation. Туда же при
+    первом запуске ложится кодировщик OpenVINO, 0.6 ГБ.
 
 .PARAMETER Python
     Базовый интерпретатор. По умолчанию Python 3.9 через py launcher, на нём

@@ -22,5 +22,8 @@ function Stop-Dictation {
     foreach ($process in $found) {
         Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
     }
+    # Без ожидания сразу следующий Start-Dictation ещё видит умирающий процесс
+    # и отвечает, что диктовка уже запущена.
+    Wait-Process -Id $found.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
     Write-Host "Остановлено процессов: $($found.Count)"
 }

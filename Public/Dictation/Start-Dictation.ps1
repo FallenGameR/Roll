@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Запускает голосовую диктовку: держишь кнопку Copilot, говоришь,
     отпускаешь, и текст печатается в позицию курсора.
@@ -22,6 +22,15 @@
 .PARAMETER Model
     Модель faster-whisper. По умолчанию turbo.
 
+.PARAMETER Encoder
+    Где считать кодировщик: gpu - OpenVINO на видеокарте, npu - на NPU, off -
+    CTranslate2 на процессоре, как было до ноября 2026. Это откат, если гибрид
+    начнёт ошибаться. Выбор запоминается в encoder.txt рядом с логом, и
+    следующие запуски без параметра, в том числе с пульта, берут его оттуда.
+    Если OpenVINO не поднялся, ptt.py сам переходит на процессор и пишет
+    причину в лог. На npu первая сборка идёт около 2.5 минут, и для неё
+    стоит поднять -TimeoutSeconds.
+
 .PARAMETER Test
     Отладка: хук принимает синтетические нажатия и пишет события в лог.
 
@@ -35,6 +44,8 @@ function Start-Dictation {
     [CmdletBinding()]
     param(
         [string] $Model = 'turbo',
+        [ValidateSet('gpu', 'npu', 'off')]
+        [string] $Encoder,
         [switch] $Test,
         [int] $TimeoutSeconds = 180
     )
@@ -45,15 +56,27 @@ function Start-Dictation {
     if (-not (Test-Path -LiteralPath $paths.PythonW)) {
         throw 'Окружение не установлено, сначала Install-Dictation.'
     }
+    New-Item -ItemType Directory -Force $paths.Home | Out-Null
+    $chosen = [bool] $Encoder
+    if ($Encoder) {
+        Set-Content -LiteralPath $paths.Encoder -Value $Encoder -Encoding ascii
+    } elseif (Test-Path -LiteralPath $paths.Encoder) {
+        $Encoder = (Get-Content -LiteralPath $paths.Encoder -TotalCount 1).Trim()
+    }
+    if ($Encoder -notin 'gpu', 'npu', 'off') { $Encoder = 'gpu' }
+
     if (Get-DictationProcess) {
-        Write-Warning 'Диктовка уже запущена.'
+        if ($chosen) {
+            Write-Warning "Диктовка уже запущена. Кодировщик $Encoder записан и включится после Stop-Dictation и нового запуска."
+        } else {
+            Write-Warning 'Диктовка уже запущена.'
+        }
         return Get-Dictation
     }
 
-    New-Item -ItemType Directory -Force $paths.Home | Out-Null
     $offset = if (Test-Path -LiteralPath $paths.Log) { (Get-Item -LiteralPath $paths.Log).Length } else { 0 }
 
-    $arguments = @("`"$($paths.Script)`"", $Model, '--log', "`"$($paths.Log)`"")
+    $arguments = @("`"$($paths.Script)`"", $Model, '--log', "`"$($paths.Log)`"", '--encoder', $Encoder)
     if ($Test) { $arguments += '--test' }
     Start-Process -FilePath $paths.PythonW -ArgumentList $arguments -WindowStyle Hidden
 

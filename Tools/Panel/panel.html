@@ -149,7 +149,10 @@
       const name = $("d-stage-name");
       name.textContent = STAGES[s.stage] ?? s.stage;
       name.className = `now-${s.stage}`;
-      let info = s.stage === "ready" ? "" : sec(elapsed);
+      // В покое под стадией видно, где считается кодировщик: после отката
+      // или сбоя OpenVINO там окажется процессор.
+      const where = { GPU: "на видеокарте", NPU: "на NPU", CPU: "на процессоре" }[s.encoder] ?? "";
+      let info = s.stage === "ready" ? where : sec(elapsed);
       if (s.stage === "decoding" && s.speech) info = `речь ${sec(s.speech)} · ${info}`;
       if (s.stage === "ready" && s.skipped && elapsed < 10) info = `пропущено: ${s.skipped}`;
       $("d-stage-info").textContent = info;
