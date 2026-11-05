@@ -119,3 +119,7 @@ git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push or
 
 Активную учётку `gh auth switch` не переключать: она общая для всех
 терминалов, а рабочие репозитории ходят под рабочей учёткой.
+
+Автор коммитов берётся из глобального `~/.gitconfig`: там стоит
+`Alex.Kostikov@gmail.com`, основной адрес `FallenGameR`. С рабочим
+адресом коммиты на GitHub не привязываются к профилю.

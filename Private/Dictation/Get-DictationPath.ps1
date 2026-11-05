@@ -17,6 +17,7 @@ function Get-DictationPath {
         PythonW      = Join-Path $dir 'venv\Scripts\pythonw.exe'
         Log          = Join-Path $dir 'dictation.log'
         Encoder      = Join-Path $dir 'encoder.txt'
+        ChimeVolume  = Join-Path $dir 'chime-volume.txt'
         Script       = Join-Path $script:RollRoot 'Tools\Dictation\ptt.py'
         Requirements = Join-Path $script:RollRoot 'Tools\Dictation\requirements.txt'
         Port         = 47811

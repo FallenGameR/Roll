@@ -18,8 +18,9 @@
 
     Звуки: высокий писк - модель готова, Speech On из C:\Windows\Media -
     пошла запись, Speech Off - запись кончилась, идёт распознавание.
-    Speech On и Off играются в десять раз тише системных (--chime-volume
-    0.1 у ptt.py): тихие копии лежат в chimes рядом с логом.
+    Speech On и Off по умолчанию играются в десять раз тише системных
+    (--chime-volume 0.1 у ptt.py): тихие копии лежат в chimes рядом с
+    логом. На машине, где этого мало, громкость задаёт -ChimeVolume.
 
     Экземпляр всегда один: скрипт занимает порт 127.0.0.1:47811, второй
     сразу выходит.
@@ -40,6 +41,12 @@
     причину в лог. На npu первая сборка идёт около 2.5 минут, и для неё
     стоит поднять -TimeoutSeconds.
 
+.PARAMETER ChimeVolume
+    Громкость звуков начала и конца записи, доля от системных: 1 - как в
+    Windows, 0 - без звука. Запоминается в chime-volume.txt рядом с логом,
+    то есть в %LOCALAPPDATA% этой машины, и следующие запуски, в том числе
+    с пульта, берут её оттуда. Без файла - 0.1.
+
 .PARAMETER Test
     Отладка: хук принимает синтетические нажатия и пишет события в лог.
 
@@ -48,13 +55,19 @@
 
 .EXAMPLE
     Start-Dictation
-#>
+
+.EXAMPLE
+    Stop-Dictation; Start-Dictation -ChimeVolume 1
+
+    Звуки записи на полную системную громкость на этой машине.#>
 function Start-Dictation {
     [CmdletBinding()]
     param(
         [string] $Model = 'turbo',
         [ValidateSet('auto', 'gpu', 'npu', 'off')]
         [string] $Encoder,
+        [ValidateRange(0, 1)]
+        [double] $ChimeVolume = -1,
         [switch] $Test,
         [int] $TimeoutSeconds = 180
     )
@@ -74,9 +87,24 @@ function Start-Dictation {
     }
     if ($Encoder -notin 'auto', 'gpu', 'npu', 'off') { $Encoder = 'auto' }
 
+    $culture = [Globalization.CultureInfo]::InvariantCulture
+    $volumeChosen = $PSBoundParameters.ContainsKey('ChimeVolume')
+    if ($volumeChosen) {
+        Set-Content -LiteralPath $paths.ChimeVolume -Value $ChimeVolume.ToString($culture) -Encoding ascii
+    } else {
+        $ChimeVolume = 0.1
+        if (Test-Path -LiteralPath $paths.ChimeVolume) {
+            $saved = 0.0
+            $text = (Get-Content -LiteralPath $paths.ChimeVolume -TotalCount 1).Trim()
+            if ([double]::TryParse($text, 'Float', $culture, [ref] $saved) -and $saved -ge 0 -and $saved -le 1) {
+                $ChimeVolume = $saved
+            }
+        }
+    }
+
     if (Get-DictationProcess) {
-        if ($chosen) {
-            Write-Warning "Диктовка уже запущена. Кодировщик $Encoder записан и включится после Stop-Dictation и нового запуска."
+        if ($chosen -or $volumeChosen) {
+            Write-Warning 'Диктовка уже запущена. Новые настройки записаны и включатся после Stop-Dictation и нового запуска.'
         } else {
             Write-Warning 'Диктовка уже запущена.'
         }
@@ -88,7 +116,8 @@ function Start-Dictation {
     # Потоков декодера по числу физических ядер: на i9-10900K 20 логических
     # потоков медленнее 10 физических на 20%.
     $cores = (Get-CimInstance Win32_Processor | Measure-Object NumberOfCores -Sum).Sum
-    $arguments = @("`"$($paths.Script)`"", $Model, '--log', "`"$($paths.Log)`"", '--encoder', $Encoder)
+    $arguments = @("`"$($paths.Script)`"", $Model, '--log', "`"$($paths.Log)`"", '--encoder', $Encoder,
+        '--chime-volume', $ChimeVolume.ToString($culture))
     if ($cores) { $arguments += '--threads', $cores }
     if ($Test) { $arguments += '--test' }
     # Рабочая папка - домашняя папка диктовки: драйвер Intel при сборке
