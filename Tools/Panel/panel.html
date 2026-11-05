@@ -161,9 +161,9 @@
       const name = $("d-stage-name");
       name.textContent = STAGES[s.stage] ?? s.stage;
       name.className = `now-${s.stage}`;
-      // В покое под стадией видно, где считается кодировщик: CPU, GPU или
-      // NPU. После отката или сбоя OpenVINO там окажется CPU.
-      const where = ["GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
+      // В покое под стадией видно, где считается модель: CUDA, GPU, NPU или
+      // CPU. После отката или сбоя CUDA и OpenVINO там окажется CPU.
+      const where = ["CUDA", "GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
       let info = s.stage === "ready" ? where : sec(elapsed);
       if (s.stage === "decoding" && s.speech) info = `речь ${sec(s.speech)} · ${info}`;
       if (s.stage === "ready" && s.skipped && elapsed < 10) info = `пропущено: ${s.skipped}`;
@@ -193,7 +193,7 @@
   function render(s) {
     dictationOn = s.dictation;
     $("d-dot").classList.toggle("on", s.dictation);
-    $("d-state").textContent = s.dictation ? "работает, держите кнопку Copilot или Menu" : "остановлена";
+    $("d-state").textContent = s.dictation ? "работает, держите Copilot, Menu или правую Win" : "остановлена";
     $("d-start").disabled = busy || s.dictation;
     $("d-stop").disabled = busy || !s.dictation;
     if (s.lastPhrase !== lastPhrase) { lastPhrase = s.lastPhrase; loadLog(); }

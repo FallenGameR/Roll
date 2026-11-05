@@ -1,6 +1,6 @@
-"""Push-to-talk dictation: hold the Copilot or Menu key, speak, release - text is typed at the cursor.
+"""Push-to-talk dictation: hold the Copilot, Menu or right Win key, speak, release - text is typed at the cursor.
 
-Usage: pythonw ptt.py [model] [--log PATH] [--encoder gpu|npu|off] [--test]
+Usage: pythonw ptt.py [model] [--log PATH] [--encoder auto|cuda|gpu|npu|off] [--test]
 Managed by Start-Dictation / Stop-Dictation / Get-Dictation from the Roll module.
 """
 import argparse
@@ -29,6 +29,7 @@ import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
 
+from cuda_model import load_cuda_model
 from ov_encoder import attach_openvino_encoder, pick_device
 
 parser = argparse.ArgumentParser()
@@ -46,10 +47,10 @@ parser.add_argument("--threads", type=int, default=os.cpu_count() or 0,
                          "Start-Dictation передаёт число физических. Замер bench.py: на 8 "
                          "ядрах все ядра быстрее библиотечных 4 потоков на 6%%, на i9-10900K "
                          "10 потоков быстрее 20 на 20%%")
-parser.add_argument("--encoder", default="auto", choices=["auto", "gpu", "npu", "off"],
-                    help="где считать кодировщик Whisper: OpenVINO на видеокарте или NPU, "
-                         "off - CTranslate2 на процессоре, auto - выбрать по железу, см. "
-                         "pick_device в ov_encoder.py")
+parser.add_argument("--encoder", default="auto", choices=["auto", "cuda", "gpu", "npu", "off"],
+                    help="где считать Whisper: cuda - вся модель на карте NVIDIA, gpu и npu - "
+                         "кодировщик в OpenVINO на видеокарте Intel или NPU, off - CTranslate2 "
+                         "на процессоре, auto - выбрать по железу, см. pick_device в ov_encoder.py")
 parser.add_argument("--chime-volume", type=float, default=0.1,
                     help="громкость звуков начала и конца записи, доля от системных "
                          "Speech On/Off.wav: 1 - как в Windows, 0 - без звука")
@@ -63,7 +64,8 @@ PROMPT = "Сделай commit и открой pull request в GitHub, потом
 
 VK_F23 = 0x86  # Copilot key sends Win+Shift+F23
 VK_APPS = 0x5D  # Menu key: sits where the Copilot key is on keyboards without one
-HOTKEYS = {VK_F23, VK_APPS}
+VK_RWIN = 0x5C  # right Win: on keyboards with neither, Win stays on the left one
+HOTKEYS = {VK_F23, VK_APPS, VK_RWIN}
 COPILOT_MODIFIERS = {0x5B, 0x10, 0xA0, 0xA1}  # Win, Shift — repeated by the Copilot key while held
 KEYDOWN = {0x100, 0x104}
 LLKHF_INJECTED = 0x10
@@ -131,11 +133,19 @@ def disable_power_throttling():
     log.info("Power throttling %s", "disabled" if ok else "left as is")
 
 
+def load_cpu_model(wanted):
+    cpu = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=args.threads)
+    return cpu, attach_openvino_encoder(cpu, wanted, log)
+
+
 disable_power_throttling()
-model = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=args.threads)
 wanted = pick_device(log) if args.encoder == "auto" else args.encoder
-encoder = attach_openvino_encoder(model, wanted, log)
-log.info("Ready. Hold the Copilot key or Menu key to dictate (encoder %s, beam %d, threads %s).",
+model = load_cuda_model(MODEL, log) if wanted == "cuda" else None
+if model is not None:
+    encoder = "CUDA"
+else:
+    model, encoder = load_cpu_model("off" if wanted == "cuda" else wanted)
+log.info("Ready. Hold the Copilot, Menu or right Win key to dictate (encoder %s, beam %d, threads %s).",
          encoder, args.beam, args.threads or "default")
 set_state("ready")
 winsound.Beep(1200, 80)
@@ -229,15 +239,16 @@ def keep_recording(audio):
         log.info("Recording not kept: %s", exc)
 
 
-def transcribe(audio, recorded):
-    seconds = len(audio) / SR
-    set_state("preparing", audio=round(seconds, 1))
+def recognize(audio, seconds):
+    """Возвращает (подготовка, речь, текст, декодирование).
+
+    transcribe() сразу отрезает тишину (VAD) и считает признаки звука, а
+    сами слова декодирует лениво. Поэтому время до возврата - подготовка,
+    а остальное - декодирование. Прогресса внутри декодирования нет:
+    Whisper разбирает звук окнами по 30 с и отдаёт сегменты только после
+    целого окна, а фраза почти всегда укладывается в одно окно.
+    """
     t = time.time()
-    # transcribe() сразу отрезает тишину (VAD) и считает признаки звука, а
-    # сами слова декодирует лениво. Поэтому время до возврата - подготовка,
-    # а остальное - декодирование. Прогресса внутри декодирования нет:
-    # Whisper разбирает звук окнами по 30 с и отдаёт сегменты только после
-    # целого окна, а фраза почти всегда укладывается в одно окно.
     segments, info = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
                                       vad_filter=True, beam_size=args.beam)
     prepared = time.time() - t
@@ -245,7 +256,23 @@ def transcribe(audio, recorded):
     set_state("decoding", audio=round(seconds, 1), speech=round(speech, 1))
     t = time.time()
     text = " ".join(s.text.strip() for s in segments).strip()
-    decoded = time.time() - t
+    return prepared, speech, text, time.time() - t
+
+
+def transcribe(audio, recorded):
+    global model, encoder
+    seconds = len(audio) / SR
+    set_state("preparing", audio=round(seconds, 1))
+    try:
+        prepared, speech, text, decoded = recognize(audio, seconds)
+    except Exception as exc:  # noqa: BLE001
+        if encoder != "CUDA":
+            raise
+        # Видеопамять может забрать игра или драйвер упасть посреди сессии.
+        # Тогда до перезапуска считаем на процессоре, а пульт покажет CPU.
+        log.info("CUDA failed, back to CPU until restart: %s", exc)
+        model, encoder = load_cpu_model("off")
+        prepared, speech, text, decoded = recognize(audio, seconds)
     log.info("%.1fs audio -> %.1fs: %s", seconds, prepared + decoded, text)
     typed = 0.0
     if text:
@@ -257,8 +284,7 @@ def transcribe(audio, recorded):
     last_run.update(at=time.time(), record=round(recorded, 1), prepare=round(prepared, 1),
                     decode=round(decoded, 1), type=round(typed, 1), chars=len(text),
                     speech=round(speech, 1))
-    global encoder
-    if "encode" not in vars(model):
+    if encoder in ("GPU", "NPU") and "encode" not in vars(model):
         encoder = "CPU"  # ov_encoder вернул штатный кодировщик после сбоя, пульт должен это видеть
     set_state("ready", skipped="" if text else "тишина")
 

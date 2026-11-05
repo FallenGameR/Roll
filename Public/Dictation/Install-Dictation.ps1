@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-    Ставит окружение голосовой диктовки: venv с faster-whisper и OpenVINO.
+    Ставит окружение голосовой диктовки: venv с faster-whisper и OpenVINO, а
+    при карте NVIDIA ещё cuBLAS и cuDNN для CUDA.
 
 .DESCRIPTION
     Создаёт venv в %LOCALAPPDATA%\Roll\dictation\venv и ставит туда пакеты из
-    Tools\Dictation\requirements.txt. Повторный запуск только доставляет
+    Tools\Dictation\requirements.txt, а если в системе есть видеокарта NVIDIA -
+    ещё из requirements-cuda.txt, около 1 ГБ. Повторный запуск только доставляет
     пакеты, -Force пересоздаёт venv с нуля.
 
     Модель whisper отдельно не качается: faster-whisper сам кладёт её в кеш
@@ -50,6 +52,12 @@ function Install-Dictation {
     & $paths.Python -m pip install --quiet --upgrade pip
     & $paths.Python -m pip install --quiet -r $paths.Requirements
     if ($LASTEXITCODE) { throw 'pip install не прошёл.' }
+
+    # cuBLAS и cuDNN для CUDA - около 1 ГБ, поэтому только при карте NVIDIA.
+    if (Get-CimInstance Win32_VideoController | Where-Object Name -match 'NVIDIA') {
+        & $paths.Python -m pip install --quiet -r $paths.RequirementsCuda
+        if ($LASTEXITCODE) { throw 'pip install библиотек CUDA не прошёл.' }
+    }
 
     Write-Host "Диктовка установлена: $($paths.Venv)"
 }

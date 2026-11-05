@@ -1,5 +1,7 @@
 """Кодировщик Whisper в OpenVINO на встроенной видеокарте или NPU для ptt.py и bench.py.
 
+Карта NVIDIA сюда не относится: там вся модель идёт на CUDA, см. cuda_model.py.
+
 Whisper состоит из двух половин. Кодировщик перемалывает 30-секундное окно звука,
 это тяжёлая матричная работа, и видеокарта делает её в разы быстрее процессора.
 Декодер выписывает слова по одному, и его оставляем CTranslate2 на процессоре.
@@ -33,14 +35,19 @@ def _download():
 
 
 def pick_device(log):
-    """Выбор для --encoder auto: gpu, npu или off по железу, без замеров.
+    """Выбор для --encoder auto: cuda, gpu, npu или off по железу, без замеров.
 
-    Видеокарта Arc есть в Core Ultra, на ней кодировщик в разы быстрее
+    Карта NVIDIA с CUDA берётся первой: на ней CTranslate2 считает всю модель,
+    см. cuda_model.py. Видеокарта Arc есть в Core Ultra, на ней кодировщик в разы быстрее
     процессора. Старая встроенная графика UHD считает его медленнее
     процессора: на i9-10900K с UHD 630 окно уходит за 7.1 с против 6.1 с у
     CTranslate2 на 10 ядрах, поэтому такая видеокарта не в счёт. Без Arc
     берём NPU, если он есть, иначе процессор.
     """
+    from cuda_model import cuda_available
+    if cuda_available(log):
+        log.info("Encoder auto: cuda")
+        return "cuda"
     try:
         import openvino as ov
         core = ov.Core()

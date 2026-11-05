@@ -21,11 +21,12 @@ import wave
 import numpy as np
 from faster_whisper import WhisperModel
 
+from cuda_model import load_cuda_model
 from ov_encoder import attach_openvino_encoder
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="turbo")
-ap.add_argument("--encoders", default="gpu,off", help="gpu, npu, off - как --encoder в ptt.py")
+ap.add_argument("--encoders", default="gpu,off", help="cuda, gpu, npu, off - как --encoder в ptt.py")
 ap.add_argument("--beams", default="5")
 ap.add_argument("--threads", default="0")
 args = ap.parse_args()
@@ -70,8 +71,12 @@ log.setLevel(logging.INFO)
 reference = None
 for encoder_wanted, threads in itertools.product(args.encoders.split(","),
                                                  [int(t) for t in args.threads.split(",")]):
-    model = WhisperModel(args.model, device="cpu", compute_type="int8", cpu_threads=threads)
-    encoder = attach_openvino_encoder(model, encoder_wanted, log)
+    model = load_cuda_model(args.model, log) if encoder_wanted == "cuda" else None
+    if model is not None:
+        encoder = "CUDA"
+    else:
+        model = WhisperModel(args.model, device="cpu", compute_type="int8", cpu_threads=threads)
+        encoder = attach_openvino_encoder(model, encoder_wanted, log)
     for beam in [int(b) for b in args.beams.split(",")]:
         def run(a):
             segments, _ = model.transcribe(a, language="ru", initial_prompt=PROMPT,

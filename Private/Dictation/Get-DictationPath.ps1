@@ -20,6 +20,7 @@ function Get-DictationPath {
         ChimeVolume  = Join-Path $dir 'chime-volume.txt'
         Script       = Join-Path $script:RollRoot 'Tools\Dictation\ptt.py'
         Requirements = Join-Path $script:RollRoot 'Tools\Dictation\requirements.txt'
+        RequirementsCuda = Join-Path $script:RollRoot 'Tools\Dictation\requirements-cuda.txt'
         Port         = 47811
     }
 }

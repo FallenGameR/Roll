@@ -1,17 +1,20 @@
 ﻿<#
 .SYNOPSIS
-    Запускает голосовую диктовку: держишь кнопку Copilot или Menu, говоришь,
-    отпускаешь, и текст печатается в позицию курсора.
+    Запускает голосовую диктовку: держишь кнопку Copilot, Menu или правую Win,
+    говоришь, отпускаешь, и текст печатается в позицию курсора.
 
 .DESCRIPTION
     Поднимает Tools\Dictation\ptt.py фоновым процессом pythonw из venv, который
     ставит Install-Dictation, и ждёт в логе строку готовности. Распознаёт
-    локальная faster-whisper на CPU, русский вперемешку с английским.
+    локальная faster-whisper, русский вперемешку с английским: на карте
+    NVIDIA целиком на CUDA, иначе на процессоре с кодировщиком в OpenVINO.
 
     Кнопка Copilot шлёт Win+Shift+F23. Скрипт глушит F23 низкоуровневым
     хуком клавиатуры, поэтому Пуск и Поиск не открываются. На клавиатуре
     без кнопки Copilot на её месте обычно стоит Menu (контекстное меню):
     она работает так же, и меню, пока диктовка запущена, не открывается.
+    Где нет и Menu, кнопкой служит правая Win: пока диктовка запущена, она
+    не открывает Пуск и не работает в сочетаниях, Win остаётся левая.
     Любая другая
     клавиша, нажатая при зажатой кнопке, запись отменяет. Записи короче
     0.4 с отбрасываются.
@@ -29,17 +32,19 @@
     Модель faster-whisper. По умолчанию turbo.
 
 .PARAMETER Encoder
-    Где считать кодировщик: auto - выбрать по железу, gpu - OpenVINO на
-    видеокарте, npu - на NPU, off - CTranslate2 на процессоре. auto берёт gpu
+    Где считать Whisper: auto - выбрать по железу, cuda - всю модель на карте
+    NVIDIA, gpu - кодировщик в OpenVINO на видеокарте Intel, npu - на NPU,
+    off - CTranslate2 на процессоре. auto берёт cuda, если CTranslate2 видит
+    карту NVIDIA и Install-Dictation поставил к ней cuBLAS и cuDNN, иначе gpu
     при видеокарте Intel Arc (Core Ultra), иначе npu, если он есть, иначе off:
     старая графика UHD считает кодировщик медленнее процессора. По умолчанию
     auto. Ручной выбор запоминается в encoder.txt рядом с логом, и следующие
     запуски без параметра, в том числе с пульта, берут его оттуда; -Encoder
     auto возвращает автоматический выбор. Что выбрано, видно в пульте и в
     логе строкой "Encoder auto".
-    Если OpenVINO не поднялся, ptt.py сам переходит на процессор и пишет
-    причину в лог. На npu первая сборка идёт около 2.5 минут, и для неё
-    стоит поднять -TimeoutSeconds.
+    Если CUDA или OpenVINO не поднялись или упали посреди работы, ptt.py сам
+    переходит на процессор и пишет причину в лог. На npu первая сборка идёт
+    около 2.5 минут, и для неё стоит поднять -TimeoutSeconds.
 
 .PARAMETER ChimeVolume
     Громкость звуков начала и конца записи, доля от системных: 1 - как в
@@ -64,7 +69,7 @@ function Start-Dictation {
     [CmdletBinding()]
     param(
         [string] $Model = 'turbo',
-        [ValidateSet('auto', 'gpu', 'npu', 'off')]
+        [ValidateSet('auto', 'cuda', 'gpu', 'npu', 'off')]
         [string] $Encoder,
         [ValidateRange(0, 1)]
         [double] $ChimeVolume = -1,
@@ -85,7 +90,7 @@ function Start-Dictation {
     } elseif (Test-Path -LiteralPath $paths.Encoder) {
         $Encoder = (Get-Content -LiteralPath $paths.Encoder -TotalCount 1).Trim()
     }
-    if ($Encoder -notin 'auto', 'gpu', 'npu', 'off') { $Encoder = 'auto' }
+    if ($Encoder -notin 'auto', 'cuda', 'gpu', 'npu', 'off') { $Encoder = 'auto' }
 
     $culture = [Globalization.CultureInfo]::InvariantCulture
     $volumeChosen = $PSBoundParameters.ContainsKey('ChimeVolume')
@@ -135,7 +140,7 @@ function Start-Dictation {
                 [void] $stream.Seek($offset, 'Begin')
                 $fresh = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8).ReadToEnd()
             } finally { $stream.Dispose() }
-            if ($fresh -match 'Ready\. Hold the Copilot key') { return Get-Dictation }
+            if ($fresh -match 'Ready\. Hold the Copilot') { return Get-Dictation }
             if ($fresh -match 'Another instance') { throw 'Порт 47811 занят другим экземпляром.' }
         }
         if (-not (Get-DictationProcess)) {
