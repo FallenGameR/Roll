@@ -26,12 +26,14 @@ export class PanelError extends Error {
 
 // Ошибка уходит в stderr одним текстом исключения: иначе pwsh рисует её
 // рамкой "Line | ~~~" с ANSI-цветом, и на странице это выглядит кракозябрами.
+// PlainText включается только для ошибки: на обычном выводе он срезал бы
+// цвета бросков, по которым пульт красит криты и промахи.
 function pwsh(command, timeout = 240_000) {
     return new Promise((resolve, reject) => {
         execFile("pwsh.exe", ["-NoProfile", "-NonInteractive", "-Command",
             "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); " +
-            "$PSStyle.OutputRendering = 'PlainText'; " +
-            `try { ${command} } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`],
+            `try { ${command} } catch { $PSStyle.OutputRendering = 'PlainText'; ` +
+            "[Console]::Error.WriteLine($_.Exception.Message); exit 1 }"],
             { windowsHide: true, timeout, encoding: "utf8" },
             (error, stdout, stderr) => {
                 if (error) reject(new Error((stderr || error.message).replace(/\x1b\[[0-9;]*m/g, "").trim()));
