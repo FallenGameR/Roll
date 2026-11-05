@@ -50,6 +50,9 @@ parser.add_argument("--encoder", default="auto", choices=["auto", "gpu", "npu", 
                     help="где считать кодировщик Whisper: OpenVINO на видеокарте или NPU, "
                          "off - CTranslate2 на процессоре, auto - выбрать по железу, см. "
                          "pick_device в ov_encoder.py")
+parser.add_argument("--chime-volume", type=float, default=0.1,
+                    help="громкость звуков начала и конца записи, доля от системных "
+                         "Speech On/Off.wav: 1 - как в Windows, 0 - без звука")
 args = parser.parse_args()
 
 MODEL = args.model
@@ -144,9 +147,37 @@ held = {"key": None, "cancelled": False}
 MEDIA = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Media")
 
 
+def quiet_wav(name, volume):
+    # Системные WAV звучат на полной громкости, поэтому сэмплы один раз
+    # умножаются на volume, а тихая копия ложится рядом с логом. Из памяти
+    # winsound асинхронно играть не умеет, отсюда файлы.
+    path = os.path.join(MEDIA, name)
+    try:
+        with wave.open(path, "rb") as src:
+            params = src.getparams()
+            frames = src.readframes(params.nframes)
+        if params.sampwidth != 2:
+            raise ValueError(f"{params.sampwidth * 8}-bit")
+        samples = (np.frombuffer(frames, dtype="<i2") * volume).astype("<i2")
+        out = os.path.join(os.path.dirname(args.log), "chimes", name)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with wave.open(out, "wb") as dst:
+            dst.setparams(params)
+            dst.writeframes(samples.tobytes())
+        return out
+    except Exception as e:
+        log.info("Chime %s at full volume: %s", name, e)
+        return path
+
+
+CHIMES = {} if args.chime_volume <= 0 else {
+    name: quiet_wav(name, min(args.chime_volume, 1.0)) for name in ("Speech On.wav", "Speech Off.wav")}
+
+
 def chime(name):
     # Windows Speech Recognition sounds; async so recording isn't delayed.
-    winsound.PlaySound(os.path.join(MEDIA, name), winsound.SND_FILENAME | winsound.SND_ASYNC)
+    if name in CHIMES:
+        winsound.PlaySound(CHIMES[name], winsound.SND_FILENAME | winsound.SND_ASYNC)
 
 
 def recorder():
