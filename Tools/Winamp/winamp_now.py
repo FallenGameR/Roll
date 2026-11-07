@@ -165,6 +165,9 @@ def load(paths, play=True):
     hwnd = find_window()
     if not hwnd:
         return False
+    # Очистка списка не останавливает уже открытый файл: без стопа Winamp
+    # доигрывал трек прежней сцены, хотя в новом списке его нет.
+    user32.SendMessageW(hwnd, WM_COMMAND, COMMANDS["stop"], 0)
     ipc(hwnd, 0, IPC_DELETE)
     for path in paths:
         buf = ctypes.create_unicode_buffer(path)
