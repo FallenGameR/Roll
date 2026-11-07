@@ -10,12 +10,18 @@ import ctypes
 import ctypes.wintypes as wt
 import json
 import sys
+import threading
 
 WM_USER = 1024
 WM_COMMAND = 273
 IPC_ISPLAYING = 104          # 1 играет, 3 пауза, 0 стоп
 IPC_GETLISTPOS = 125
 IPC_GETPLAYLISTFILEW = 214   # указатель на широкую строку в памяти Winamp
+# Winamp отдаёт имя в своём единственном буфере, и следующий запрос его
+# перезаписывает. Сервер страницы многопоточный: без замка current() из
+# соседнего потока вклинивался между запросом и чтением, и в списке на чужом
+# месте оказывался играющий трек, а список на странице перерисовывался.
+FILENAME_LOCK = threading.Lock()
 IPC_GETOUTPUTTIME = 105      # wParam 0 - позиция в мс, 1 - длина в секундах
 IPC_JUMPTOTIME = 106         # перемотать на указанную миллисекунду
 IPC_SETPLAYLISTPOS = 121
@@ -144,11 +150,19 @@ def playlist(limit=5000):
         buf = ctypes.create_unicode_buffer(1024)
         read = ctypes.c_size_t()
         for index in range(count):
-            pointer = ipc(hwnd, index, IPC_GETPLAYLISTFILEW)
-            path = ""
-            if pointer and kernel32.ReadProcessMemory(
-                    handle, ctypes.c_void_p(pointer), buf, 2048, ctypes.byref(read)):
-                path = buf.value
+            # Буфер иногда переписывает и сам Winamp, а его замком не
+            # остановишь: имя принимаем, только если два чтения подряд совпали.
+            path, last = "", None
+            for _ in range(4):
+                got = ""
+                with FILENAME_LOCK:
+                    pointer = ipc(hwnd, index, IPC_GETPLAYLISTFILEW)
+                    if pointer and kernel32.ReadProcessMemory(
+                            handle, ctypes.c_void_p(pointer), buf, 2048, ctypes.byref(read)):
+                        got = buf.value
+                if got == last:
+                    break
+                path = last = got
             items.append({"index": index, "path": path,
                           "name": path.rsplit("\\", 1)[-1][:-4] if path else ""})
         return items
@@ -181,13 +195,14 @@ def current():
 
     state = ipc(hwnd, 0, IPC_ISPLAYING)
     pos = ipc(hwnd, 0, IPC_GETLISTPOS)
-    pointer = ipc(hwnd, pos, IPC_GETPLAYLISTFILEW)
     path = ""
-    if pointer:
-        try:
-            path = read_remote_wstring(pid.value, pointer)
-        except OSError as exc:
-            return {"running": True, "error": str(exc), "index": pos}
+    with FILENAME_LOCK:
+        pointer = ipc(hwnd, pos, IPC_GETPLAYLISTFILEW)
+        if pointer:
+            try:
+                path = read_remote_wstring(pid.value, pointer)
+            except OSError as exc:
+                return {"running": True, "error": str(exc), "index": pos}
 
     title = ctypes.create_unicode_buffer(512)
     user32.GetWindowTextW(hwnd, title, 512)

@@ -455,9 +455,13 @@ PAGE = r"""<!doctype html>
  body { margin:0; font:15px/1.5 "Segoe UI",sans-serif; background:#15161a; color:#dcdde1; }
  header { padding:12px 20px; background:#1d1f26; border-bottom:1px solid #2c2f38;
           position:sticky; top:0; z-index:5;
-          display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
- h1 { font-size:19px; margin:0; font-weight:600; }
- .folder { color:#8b8f9c; font-size:13px; }
+          display:flex; align-items:center; gap:14px; flex-wrap:nowrap; }
+ /* Шапка всегда в одну строку: длинное название трека сжимается и
+    обрезается многоточием, а не сталкивает ползунки и статус вниз. */
+ header > * { flex:none; }
+ h1 { font-size:19px; margin:0; font-weight:600;
+      flex:0 1 auto !important; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+ .folder { color:#8b8f9c; font-size:13px; white-space:nowrap; }
  .transport { display:flex; gap:5px; }
  .transport button { font-size:15px; line-height:1; padding:7px 11px; cursor:pointer;
                      background:#242731; color:#dcdde1; border:1px solid #333744;
@@ -628,6 +632,7 @@ function renderStars(n){
 
 function render(d){
   document.getElementById("name").textContent = d.name || "";
+  document.getElementById("name").title = d.name || "";
   document.getElementById("folder").textContent = d.folder ? "/" + d.folder : "";
   renderStars(d.stars || 0);
   let html = "";

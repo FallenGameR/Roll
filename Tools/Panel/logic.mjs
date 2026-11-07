@@ -122,7 +122,7 @@ export async function stopDictation() {
     return status();
 }
 
-export async function startWinamp() {
+async function startWinampNow() {
     if (!(await winampUp())) {
         // Start-WinampPlaylist держит сервер на переднем плане, поэтому он
         // живёт в отдельном скрытом pwsh, отвязанном от расширения: так
@@ -152,15 +152,30 @@ export async function startWinamp() {
     return status();
 }
 
-export async function stopWinamp() {
+async function stopWinampNow() {
     for (const p of await processes()) {
         if (/tagger\.py/.test(p.CommandLine)) {
             await pwsh(`Stop-Process -Id ${p.ProcessId} -Force -ErrorAction SilentlyContinue`, 30_000);
         }
     }
+    // Порт освобождается не сразу после Stop-Process. Без ожидания следующий
+    // startWinamp видел живой порт умирающего сервера и ничего не запускал.
+    for (let i = 0; i < 20 && (await winampUp()); i++) {
+        await new Promise((r) => setTimeout(r, 250));
+    }
     return status();
 }
 
+// Запуск и остановка страницы идут по очереди: два одновременных запуска
+// (кнопка и действие агента) иначе поднимали два сервера на одном порту.
+let winampQueue = Promise.resolve();
+function queued(job) {
+    const run = winampQueue.then(job, job);
+    winampQueue = run.catch(() => { });
+    return run;
+}
+export const startWinamp = () => queued(startWinampNow);
+export const stopWinamp = () => queued(stopWinampNow);
 export function openWinampBrowser() {
     spawn("cmd.exe", ["/c", "start", "", WINAMP_URL], { detached: true, stdio: "ignore", windowsHide: true }).unref();
     return status();
