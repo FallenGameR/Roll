@@ -132,7 +132,22 @@ def remove(index, path):
     editor = ipc(hwnd, IPC_GETWND_PE, IPC_GETWND)
     if not editor:
         return False
+    playing_index = ipc(hwnd, 0, IPC_GETLISTPOS)
+    playing = ipc(hwnd, 0, IPC_ISPLAYING) == 1
     user32.SendMessageW(editor, WM_USER, IPC_PE_DELETEINDEX, index)
+    # Удалённый трек Winamp доигрывает, а позиция уже стоит на соседе, и
+    # непонятно, что звучит. Поэтому сразу переходим на следующий (после
+    # последнего - на первый); на паузе только ставим позицию, не играя.
+    if index == playing_index:
+        left = ipc(hwnd, 0, IPC_GETLISTLENGTH)
+        if left:
+            target = index if index < left else 0
+            if playing:
+                jump(target)
+            else:
+                ipc(hwnd, target, IPC_SETPLAYLISTPOS)
+        else:
+            control("stop")
     return True
 
 
