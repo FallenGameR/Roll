@@ -416,6 +416,39 @@ def scenes_state():
     return {"scenes": out, "current": current}
 
 
+def drop_from_scene(queue, index, path):
+    """Вычёркивает трек из сцены медиатеки, если очередь плеера - эта сцена.
+
+    Удаление из очереди само по себе живёт до следующего выбора сцены, а
+    Мастер удаляет, чтобы подобрать музыку к месту. Поэтому трек убирается и
+    из .m3u8 сцены в медиатеке; оттуда Sync-WinampPlaylist перенесёт правку в
+    markdown кампании. Сцена узнаётся по совпадению всех треков, как и в
+    scenes_state, а вычёркивается ровно строка с этим номером.
+    """
+    import xml.etree.ElementTree as ET
+    index_file = CATALOG / "playlists.xml"
+    if not index_file.exists():
+        return ""
+    wanted = [p.lower() for p in queue]
+    for node in ET.parse(index_file).getroot():
+        title = node.get("title") or ""
+        m3u = CATALOG / (node.get("filename") or "")
+        if not title.startswith(".") or not m3u.is_file():
+            continue
+        lines = m3u.read_text(encoding="utf-8-sig").splitlines()
+        tracks = [i for i, line in enumerate(lines) if line.strip() and not line.startswith("#")]
+        if [lines[i].strip().lower() for i in tracks] != wanted:
+            continue
+        if not 0 <= index < len(tracks) or lines[tracks[index]].strip().lower() != path.lower():
+            return ""
+        del lines[tracks[index]]
+        # Winamp пишет свои списки в UTF-8 с BOM и CRLF - так и оставляем.
+        with open(m3u, "w", encoding="utf-8-sig", newline="\r\n") as handle:
+            handle.write("\n".join(lines) + "\n")
+        return title
+    return ""
+
+
 def load_scene(title):
     match = next((s for s in scenes() if s["title"] == title), None)
     if not match:
@@ -484,7 +517,9 @@ PAGE = r"""<!doctype html>
  .columns { display:flex; align-items:flex-start; gap:24px; padding:18px 20px 14px; }
  main { flex:1 1 auto; min-width:0; display:flex; flex-direction:column;
         min-height:calc(100vh / var(--z, 1) - 94px); }
- aside { flex:0 0 auto; max-width:510px; margin-left:auto; position:sticky;
+ /* Ширина плейлиста идёт от самого длинного названия, но не меньше 430 px
+    (в узком окне - не больше 45% экрана, чтобы не сплющить теги). */
+ aside { flex:0 0 auto; min-width:min(430px, 45vw); max-width:760px; margin-left:auto; position:sticky;
          top:calc(var(--hdr, 66px) + 18px);
          height:calc(100vh / var(--z, 1) - var(--hdr, 66px) - 36px); display:flex; flex-direction:column;
          border-left:1px solid #2c2f38; padding-left:16px; }
@@ -823,6 +858,7 @@ async function removeTrack(li){
     const j = await (await fetch("/api/remove", {method:"POST",
       body: JSON.stringify({index: +li.dataset.i, path: li.dataset.p})})).json();
     if (!j.ok){ li.classList.remove("gone"); setState("не удалила: " + (j.error || "?"), "failed"); }
+    else setState(j.scene ? "убрала из сцены " + j.scene.slice(1) : "убрала из очереди, сцены у неё нет", "saved");
   } catch(e){ li.classList.remove("gone"); setState("ошибка: " + e, "failed"); }
   plDrawn = ""; pollPlaylist();
 }
@@ -1022,11 +1058,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps({"ok": ok}))
                 return
             if self.path.startswith("/api/remove"):
+                queue = [i["path"] for i in winamp_now.playlist()]
                 ok = winamp_now.remove(payload["index"], payload["path"])
                 _playlist_cache["at"] = 0.0
-                self._send(200, json.dumps({"ok": ok} if ok else
-                                           {"ok": False, "error": "список изменился, трек не удалён"},
-                                           ensure_ascii=False))
+                if not ok:
+                    self._send(200, json.dumps({"ok": False, "error": "список изменился, трек не удалён"},
+                                               ensure_ascii=False))
+                    return
+                scene = drop_from_scene(queue, int(payload["index"]), payload["path"])
+                self._send(200, json.dumps({"ok": True, "scene": scene}, ensure_ascii=False))
                 return
             if self.path.startswith("/api/launch"):
                 launch_winamp()
