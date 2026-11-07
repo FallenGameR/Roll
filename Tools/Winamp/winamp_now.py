@@ -29,6 +29,9 @@ IPC_SETVOLUME = 122          # 0-255, либо -666 чтобы узнать те
 VOLUME_QUERY = -666          # -1 здесь не запрос, а попытка что-то выставить
 IPC_GETLISTLENGTH = 124
 IPC_DELETE = 101             # очистить список
+IPC_GETWND = 260             # окно плеера по номеру: IPC_GETWND_PE - редактор плейлиста
+IPC_GETWND_PE = 1
+IPC_PE_DELETEINDEX = 104     # редактору плейлиста: удалить трек; это не IPC_ISPLAYING главного окна
 IPC_PLAYFILEW = 1100         # через WM_COPYDATA: добавить файл в конец списка
 WM_COPYDATA = 0x004A
 PROCESS_VM_READ = 0x0010
@@ -100,6 +103,37 @@ def playlist_length():
     """Сколько треков в списке - один дешёвый вызов, без чтения имён."""
     hwnd = find_window()
     return ipc(hwnd, 0, IPC_GETLISTLENGTH) if hwnd else 0
+
+
+def remove(index, path):
+    """Удаляет из списка плеера трек с этим номером, если там всё ещё этот путь.
+
+    Отдельного трека главное окно удалять не умеет, это делает окно редактора
+    плейлиста. У него порядок аргументов обратный: код команды идёт в wParam,
+    параметр в lParam. Путь сверяем, чтобы при сдвинувшемся списке не удалить
+    соседний трек.
+    """
+    hwnd = find_window()
+    if not hwnd:
+        return False
+    index = int(index)
+    if not 0 <= index < ipc(hwnd, 0, IPC_GETLISTLENGTH):
+        return False
+    pid = wt.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    with FILENAME_LOCK:
+        pointer = ipc(hwnd, index, IPC_GETPLAYLISTFILEW)
+        try:
+            actual = read_remote_wstring(pid.value, pointer) if pointer else ""
+        except OSError:
+            return False
+    if actual.lower() != str(path).lower():
+        return False
+    editor = ipc(hwnd, IPC_GETWND_PE, IPC_GETWND)
+    if not editor:
+        return False
+    user32.SendMessageW(editor, WM_USER, IPC_PE_DELETEINDEX, index)
+    return True
 
 
 class COPYDATASTRUCT(ctypes.Structure):

@@ -497,6 +497,18 @@ PAGE = r"""<!doctype html>
  .pl li:hover { background:#232733; color:#dcdde1; }
  .pl li.now { background:#2b4a63; color:#eaf4fb; }
  .pl li b { color:#6f7585; font-weight:400; margin-right:7px; }
+ .pl li { position:relative; }
+ /* Кнопка лежит поверх конца названия и ширину строки не меняет: колонка
+    подстраивается под самую широкую строку и прыгала бы при наведении. */
+ .pl li .del { position:absolute; right:3px; top:50%; transform:translateY(-50%); display:none;
+               width:24px; height:22px; padding:0; align-items:center; justify-content:center;
+               border:1px solid #333744; border-radius:5px; background:#242731; color:#8b8f9c;
+               box-shadow:-18px 0 12px -2px #232733; }
+ .pl li.now .del { box-shadow:-18px 0 12px -2px #2b4a63; }
+ .pl li .del svg { width:14px; height:14px; display:block; }
+ .pl li:hover .del { display:flex; }
+ .pl li .del:hover { background:#2e3240; border-color:#4a5164; color:#dcdde1; }
+ .pl li.gone { opacity:.35; }
  .cat { margin-bottom:18px; }
  .cat h2 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
            color:#8b8f9c; margin:0 0 7px; font-weight:600; }
@@ -610,7 +622,7 @@ new ResizeObserver(() => document.documentElement.style.setProperty(
 const CATS = __CATS__, VALUES = __VALUES__, META = __META__, HINTS = __HINTS__;
 let cur = null, saving = false, plDrawn = "";
 
-function esc(s){ return (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function esc(s){ return (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function setState(text, cls){
   const st = document.getElementById("state");
@@ -763,6 +775,9 @@ seekBox.addEventListener("change", () => {
   fetch("/api/seek", {method:"POST", body: JSON.stringify({ms: +seekBox.value * 1000})});
 });
 
+const TRASH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5"/></svg>';
+
 function renderPlaylist(items, index){
   const ul = document.getElementById("playlist");
   // Перерисовываем список только когда он сам поменялся: иначе каждую
@@ -772,11 +787,14 @@ function renderPlaylist(items, index){
   if (stamp !== plDrawn){
     plDrawn = stamp;
     ul.innerHTML = items.map(it =>
-      `<li data-i="${it.index}" title="${esc(it.name)}"><b>${it.index + 1}</b>${esc(it.name)}</li>`
+      `<li data-i="${it.index}" data-p="${esc(it.path)}" title="${esc(it.name)}"><b>${it.index + 1}</b>${esc(it.name)}` +
+      `<span class="del" title="убрать из плейлиста (Delete)">${TRASH}</span></li>`
     ).join("");
     ul.querySelectorAll("li").forEach(li => {
-      li.onclick = () => fetch("/api/jump", {method:"POST",
-        body: JSON.stringify({index: +li.dataset.i})});
+      li.onclick = e => {
+        if (e.target.closest(".del")) { removeTrack(li); return; }
+        fetch("/api/jump", {method:"POST", body: JSON.stringify({index: +li.dataset.i})});
+      };
     });
   }
   ul.querySelectorAll("li").forEach(li => {
@@ -793,6 +811,26 @@ async function pollPlaylist(){
     renderPlaylist(d.items || [], d.index);
   } catch(e){ }
 }
+
+// Убрать трек из плейлиста плеера: крестиком при наведении или клавишей
+// Delete. Delete берёт трек под курсором, а если курсор не над списком -
+// тот, что играет. Сервер сверяет путь по номеру и откажет, если список
+// успел сдвинуться.
+async function removeTrack(li){
+  if (!li) return;
+  li.classList.add("gone");
+  try {
+    const j = await (await fetch("/api/remove", {method:"POST",
+      body: JSON.stringify({index: +li.dataset.i, path: li.dataset.p})})).json();
+    if (!j.ok){ li.classList.remove("gone"); setState("не удалила: " + (j.error || "?"), "failed"); }
+  } catch(e){ li.classList.remove("gone"); setState("ошибка: " + e, "failed"); }
+  plDrawn = ""; pollPlaylist();
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "Delete" || /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const ul = document.getElementById("playlist");
+  removeTrack(ul.querySelector("li:hover") || ul.querySelector("li.now"));
+});
 
 async function poll(){
   try {
@@ -982,6 +1020,13 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.startswith("/api/jump"):
                 ok = winamp_now.jump(payload["index"])
                 self._send(200, json.dumps({"ok": ok}))
+                return
+            if self.path.startswith("/api/remove"):
+                ok = winamp_now.remove(payload["index"], payload["path"])
+                _playlist_cache["at"] = 0.0
+                self._send(200, json.dumps({"ok": ok} if ok else
+                                           {"ok": False, "error": "список изменился, трек не удалён"},
+                                           ensure_ascii=False))
                 return
             if self.path.startswith("/api/launch"):
                 launch_winamp()
