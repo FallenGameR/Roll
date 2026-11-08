@@ -280,6 +280,10 @@ def playlist_state():
     stale = time.time() - _playlist_cache["at"] > 15
     if length != _playlist_cache["length"] or stale:
         items = winamp_now.playlist()
+        # Звёзды - пометка «теги проставлены»: Мастер ставит их после
+        # разметки, и в списке видно, что ещё не размечено.
+        for item in items:
+            item["stars"] = read_stars(item["path"])[0] if item["path"] else 0
         _playlist_cache.update({"at": time.time(), "items": items,
                                 "length": len(items)})
     return {"items": _playlist_cache["items"], "index": now.get("index", -1)}
@@ -541,6 +545,10 @@ PAGE = r"""<!doctype html>
  .pl li:hover { background:#232733; color:#dcdde1; }
  .pl li.now { background:#2b4a63; color:#eaf4fb; }
  .pl li b { color:#6f7585; font-weight:400; margin-right:7px; }
+ .pl li .rated { position:absolute; right:10px; top:50%; transform:translateY(-50%);
+                 font-style:normal; font-size:12px; color:#6f7585; }
+ .pl li { padding-right:26px; }
+ .pl li:hover .rated { visibility:hidden; }
  .pl li { position:relative; }
  /* Кнопка лежит поверх конца названия и ширину строки не меняет: колонка
     подстраивается под самую широкую строку и прыгала бы при наведении. */
@@ -864,11 +872,12 @@ function renderPlaylist(items, index){
   // Перерисовываем список только когда он сам поменялся: иначе каждую
   // секунду сбрасывалась бы прокрутка. Отпечаток берём по всем именам -
   // трек могли не удалить, а заменить, и тогда длина не меняется.
-  const stamp = items.map(i => i.name).join("\u0001");
+  const stamp = items.map(i => i.name + "\u0002" + (i.stars ? 1 : 0)).join("\u0001");
   if (stamp !== plDrawn){
     plDrawn = stamp;
     ul.innerHTML = items.map(it =>
       `<li data-i="${it.index}" data-p="${esc(it.path)}" title="${esc(it.name)}"><b>${it.index + 1}</b>${esc(it.name)}` +
+      (it.stars ? `<i class="rated" title="оценён: ${it.stars}★, теги проставлены">★</i>` : "") +
       `<span class="del" title="убрать из плейлиста (Delete)">${TRASH}</span></li>`
     ).join("");
     ul.querySelectorAll("li").forEach(li => {
@@ -1130,6 +1139,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.path.startswith("/api/stars"):
                 stars = write_stars(payload["path"], int(payload["stars"]))
+                _playlist_cache["at"] = 0.0
                 self._send(200, json.dumps({"ok": True, "stars": stars}))
                 return
             write_tags(payload["path"], payload["selected"], payload["meta"])
