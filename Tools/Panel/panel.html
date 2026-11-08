@@ -116,6 +116,7 @@
   <h2>Кубики</h2>
   <div class="row">
     <input id="r-text" placeholder="2d6+3, 2xd20 vs 15, 6x d20 + 6 adv" autocomplete="off" spellcheck="false">
+    <button id="r-clear" title="Стереть результаты бросков">Очистить</button>
   </div>
   <pre id="r-out"></pre>
 </section>
@@ -217,7 +218,7 @@
     busy = true;
     $("error").textContent = "";
     $(label).textContent = "минутку...";
-    document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    document.querySelectorAll("button:not(#r-clear)").forEach((b) => (b.disabled = true));
     try {
       const data = await post(path);
       busy = false;
@@ -295,6 +296,7 @@
 
   const history = [];
   let cursor = 0;
+  $("r-clear").onclick = () => { $("r-out").innerHTML = ""; $("r-text").focus(); };
   $("r-text").addEventListener("keydown", async (e) => {
     if (e.key === "ArrowUp" && cursor > 0) { $("r-text").value = history[--cursor]; e.preventDefault(); return; }
     if (e.key === "ArrowDown" && cursor < history.length) { $("r-text").value = history[++cursor] ?? ""; e.preventDefault(); return; }

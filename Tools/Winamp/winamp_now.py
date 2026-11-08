@@ -9,6 +9,7 @@
 import ctypes
 import ctypes.wintypes as wt
 import json
+import random
 import sys
 import threading
 
@@ -29,6 +30,7 @@ IPC_SETVOLUME = 122          # 0-255, либо -666 чтобы узнать те
 VOLUME_QUERY = -666          # -1 здесь не запрос, а попытка что-то выставить
 IPC_GETLISTLENGTH = 124
 IPC_DELETE = 101             # очистить список
+IPC_GET_SHUFFLE = 250        # 1, если в плеере включён случайный порядок
 IPC_GETWND = 260             # окно плеера по номеру: IPC_GETWND_PE - редактор плейлиста
 IPC_GETWND_PE = 1
 IPC_PE_DELETEINDEX = 104     # редактору плейлиста: удалить трек; это не IPC_ISPLAYING главного окна
@@ -142,6 +144,8 @@ def remove(index, path):
         left = ipc(hwnd, 0, IPC_GETLISTLENGTH)
         if left:
             target = index if index < left else 0
+            if ipc(hwnd, 0, IPC_GET_SHUFFLE):
+                target = random.randrange(left)
             if playing:
                 jump(target)
             else:
@@ -175,7 +179,10 @@ def load(paths, play=True):
                              ctypes.cast(buf, ctypes.c_void_p))
         user32.SendMessageW(hwnd, WM_COPYDATA, 0, ctypes.addressof(cds))
     if play and paths:
-        ipc(hwnd, 0, IPC_SETPLAYLISTPOS)
+        # Со случайным порядком Winamp сам начинает новый список с случайного
+        # трека; повторяем это, иначе сцена всегда открывалась первым треком.
+        start = random.randrange(len(paths)) if ipc(hwnd, 0, IPC_GET_SHUFFLE) else 0
+        ipc(hwnd, start, IPC_SETPLAYLISTPOS)
         user32.SendMessageW(hwnd, WM_COMMAND, COMMANDS["play"], 0)
     return True
 
