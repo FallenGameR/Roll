@@ -61,6 +61,7 @@
            align-items: flex-end; text-align: right;
            font-variant-numeric: tabular-nums; }
   .stage > span { white-space: nowrap; }
+  #d-stage-info { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
   /* Стадия всегда справа от кнопок, без переноса на свою строку. */
   .row.nowrap { flex-wrap: nowrap; }
   .row.nowrap > button { flex: none; }
@@ -165,10 +166,16 @@
       // В покое под стадией видно, где считается модель: CUDA, GPU, NPU или
       // CPU. После отката или сбоя CUDA и OpenVINO там окажется CPU.
       const where = ["CUDA", "GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
-      let info = s.stage === "ready" ? where : sec(elapsed);
+      // Рядом - микрофон по умолчанию, с которого пойдёт запись. Windows
+      // зовёт их "Microphone (Blue Snowball)", в пульте остаётся суть.
+      const mic = (s.mic ?? "").replace(/^(Microphone|Микрофон)\s*\((.*)\)$/i, "$2");
+      const idle = s.mic === "" ? `нет микрофона · ${where}` : [mic, where].filter(Boolean).join(" · ");
+      let info = s.stage === "ready" ? idle : sec(elapsed);
+      if (s.stage === "recording" && mic) info = `${mic} · ${info}`;
       if (s.stage === "decoding" && s.speech) info = `речь ${sec(s.speech)} · ${info}`;
       if (s.stage === "ready" && s.skipped && elapsed < 10) info = `пропущено: ${s.skipped}`;
       $("d-stage-info").textContent = info;
+      $("d-stage-info").title = s.mic ? `микрофон: ${s.mic}` : "";
       box.hidden = false;
 
       // Разбор последней фразы, одной строкой: запись, подготовка,

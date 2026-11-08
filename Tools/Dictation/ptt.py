@@ -86,6 +86,40 @@ log.info("Loading model %s", MODEL)
 
 STATE_PATH = os.path.join(os.path.dirname(args.log), "state.json")
 last_run = {}
+state = {}
+mic = None
+
+
+def refresh_mic():
+    """Перечитывает микрофон по умолчанию и, если он сменился, сообщает пульту.
+
+    PortAudio запоминает список устройств при старте, и без перезапуска
+    запись шла бы с прежнего микрофона, даже когда в Windows выбран новый.
+    Переинициализация стоит около 30 мс, поэтому делается перед каждой
+    записью и раз в несколько секунд в простое. Зовётся только из потока
+    записи и до его запуска: PortAudio нельзя трогать, пока открыт поток.
+    Имя берётся из WASAPI: MME обрезает названия до 31 знака.
+    """
+    global mic
+    try:
+        sd._terminate()
+        sd._initialize()
+        device = next((h["default_input_device"] for h in sd.query_hostapis()
+                       if h["name"] == "Windows WASAPI" and h["default_input_device"] >= 0),
+                      sd.default.device[0])
+        name = sd.query_devices(device)["name"] if device is not None and device >= 0 else ""
+    except Exception as exc:  # noqa: BLE001
+        log.info("Microphone lookup failed: %s", exc)
+        name = ""
+    if name != mic:
+        log.info("Microphone: %s", name or "none")
+        mic = name
+        if state:
+            state["mic"] = name
+            write_state(state)
+
+
+refresh_mic()
 
 
 def set_state(stage, **extra):
@@ -95,8 +129,15 @@ def set_state(stage, **extra):
     Пишем через временный файл и os.replace, иначе пульт может прочитать
     половину JSON.
     """
-    data = {"stage": stage, "since": time.time(), "last": last_run, "encoder": globals().get("encoder")}
+    data = {"stage": stage, "since": time.time(), "last": last_run,
+            "encoder": globals().get("encoder"), "mic": mic}
     data.update(extra)
+    state.clear()
+    state.update(data)
+    write_state(data)
+
+
+def write_state(data):
     tmp = STATE_PATH + ".tmp"
     try:
         with open(tmp, "w", encoding="utf-8") as f:
@@ -192,9 +233,14 @@ def chime(name):
 
 def recorder():
     while True:
-        cmd = commands.get()
+        try:
+            cmd = commands.get(timeout=3)
+        except queue.Empty:
+            refresh_mic()
+            continue
         if cmd != "start":
             continue
+        refresh_mic()
         chunks = []
         start = time.time()
         stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32",
