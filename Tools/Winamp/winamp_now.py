@@ -31,6 +31,9 @@ VOLUME_QUERY = -666          # -1 здесь не запрос, а попытк�
 IPC_GETLISTLENGTH = 124
 IPC_DELETE = 101             # очистить список
 IPC_GET_SHUFFLE = 250        # 1, если в плеере включён случайный порядок
+IPC_GET_REPEAT = 251         # 1, если список повторяется по кругу
+IPC_SET_SHUFFLE = 252        # wParam 1/0 - включить/выключить случайный порядок
+IPC_SET_REPEAT = 253         # wParam 1/0 - включить/выключить повтор
 IPC_GETWND = 260             # окно плеера по номеру: IPC_GETWND_PE - редактор плейлиста
 IPC_GETWND_PE = 1
 IPC_PE_DELETEINDEX = 104     # редактору плейлиста: удалить трек; это не IPC_ISPLAYING главного окна
@@ -276,7 +279,21 @@ def current():
         "elapsed_ms": elapsed if 0 <= elapsed < 1 << 31 else 0,
         "length_sec": length if length and length > 0 else 0,
         "window_title": title.value,
+        "shuffle": bool(ipc(hwnd, 0, IPC_GET_SHUFFLE)),
+        "repeat": bool(ipc(hwnd, 0, IPC_GET_REPEAT)),
     }
+
+
+def set_mode(shuffle=None, repeat=None):
+    """Включает или выключает случайный порядок и повтор списка в плеере."""
+    hwnd = find_window()
+    if not hwnd:
+        return False
+    if shuffle is not None:
+        ipc(hwnd, int(bool(shuffle)), IPC_SET_SHUFFLE)
+    if repeat is not None:
+        ipc(hwnd, int(bool(repeat)), IPC_SET_REPEAT)
+    return True
 
 
 if __name__ == "__main__":

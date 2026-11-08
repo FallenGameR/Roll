@@ -292,6 +292,7 @@ def track_state():
     path = now.get("path") or ""
     if not path or not os.path.exists(path):
         return {"running": True, "state": now.get("state"), "path": path,
+                "shuffle": now.get("shuffle", False), "repeat": now.get("repeat", False),
                 "error": "Winamp играет файл, которого нет на диске"}
 
     tags = probe_tags(path)
@@ -316,6 +317,8 @@ def track_state():
         "elapsed_ms": now.get("elapsed_ms", 0),
         "length_sec": now.get("length_sec", 0),
         "index": now.get("index", -1),
+        "shuffle": now.get("shuffle", False),
+        "repeat": now.get("repeat", False),
         "situation": sections.get("Situation", ""),
         "description": sections.get("Description", ""),
         "measurement": sections.get("Measurement", ""),
@@ -501,6 +504,12 @@ PAGE = r"""<!doctype html>
                      border-radius:6px; }
  .transport button:hover { background:#2e3240; border-color:#4a5164; }
  .transport button:active { background:#3a4052; }
+ button.mode { flex:none; display:flex; align-items:center; justify-content:center; width:40px;
+               padding:0; cursor:pointer; background:#242731; color:#6f7585;
+               border:1px solid #333744; border-radius:8px; }
+ button.mode:hover { background:#2e3240; border-color:#4a5164; }
+ button.mode svg { width:17px; height:16px; display:block; }
+ button.mode.on { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
  .stars { display:flex; gap:2px; margin-left:4px; }
  .stars span { font-size:20px; line-height:1; cursor:pointer; color:#3c414f; padding:0 1px; }
  .stars span.on { color:#e3b341; }
@@ -571,7 +580,8 @@ PAGE = r"""<!doctype html>
  .launch:hover { background:#345a78; }
  .launch:disabled { cursor:default; opacity:.6; }
  code { color:#7f8596; font-size:12px; }
- #scenebtn { flex:0 0 auto; width:100%; margin-top:10px; text-align:left;
+ .scenebar { flex:0 0 auto; display:flex; gap:6px; margin-top:10px; }
+ #scenebtn { flex:1 1 auto; min-width:0; text-align:left;
              font:inherit; font-size:14px; padding:8px 12px; cursor:pointer;
              background:#242731; color:#dcdde1; border:1px solid #43708f; border-radius:8px;
              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -620,7 +630,11 @@ PAGE = r"""<!doctype html>
   <aside>
     <h2>Плейлист</h2>
     <ul class="pl" id="playlist"></ul>
-    <button id="scenebtn" title="Сменить плейлист (клавиша P)"><small>плейлист</small><span id="scenename">…</span></button>
+    <div class="scenebar">
+      <button id="scenebtn" title="Сменить плейлист (клавиша P)"><small>плейлист</small><span id="scenename">…</span></button>
+      <button class="mode" data-mode="shuffle" title="случайный порядок"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h2.5c3 0 4 7 7 7H14M2 11.5h2.5c1.2 0 2-1 2.6-2.3M9 6.8c.6-1.3 1.4-2.3 2.6-2.3H14M12 2.5l2 2-2 2M12 9.5l2 2-2 2"/></svg></button>
+      <button class="mode" data-mode="repeat"  title="повтор списка по кругу"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V6a2 2 0 0 1 2-2h8M11 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3M5 14l-2-2 2-2"/></svg></button>
+    </div>
   </aside>
 </div>
 <div id="scenes">
@@ -774,10 +788,27 @@ async function saveStars(n){
   saving = false;
 }
 
-document.querySelectorAll(".transport button").forEach(b => {
+document.querySelectorAll("button[data-cmd]").forEach(b => {
   b.onclick = () => fetch("/api/control", {method:"POST",
     body: JSON.stringify({cmd: b.dataset.cmd})});
 });
+
+// Случайный порядок и повтор: кнопка показывает режим плеера и
+// переключает его. Секунду после щелчка опрос её не трогает, иначе
+// подсветка мигала бы назад до ответа плеера.
+let modeTouched = 0;
+document.querySelectorAll("button[data-mode]").forEach(b => {
+  b.onclick = () => {
+    const on = !b.classList.contains("on");
+    b.classList.toggle("on", on); modeTouched = Date.now();
+    fetch("/api/mode", {method:"POST", body: JSON.stringify({[b.dataset.mode]: on})});
+  };
+});
+function showModes(d){
+  if (Date.now() - modeTouched < 1000) return;
+  document.querySelectorAll("button[data-mode]").forEach(b =>
+    b.classList.toggle("on", !!d[b.dataset.mode]));
+}
 
 const volBox = document.getElementById("vol");
 let volTouched = 0;
@@ -888,6 +919,7 @@ async function poll(){
       if (!st.classList.contains("saved") && !st.classList.contains("failed"))
         setState(d.state);
     }
+    if (d.running && !d.error) showModes(d);
     // Ползунки не трогаем секунду после того, как их двигали руками,
     // иначе они дёргаются назад на ответе плеера.
     if (d.volume != null && Date.now() - volTouched > 1000){
@@ -1043,6 +1075,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path.startswith("/api/control"):
                 ok = winamp_now.control(payload.get("cmd", ""))
+                self._send(200, json.dumps({"ok": ok}))
+                return
+            if self.path.startswith("/api/mode"):
+                ok = winamp_now.set_mode(payload.get("shuffle"), payload.get("repeat"))
                 self._send(200, json.dumps({"ok": ok}))
                 return
             if self.path.startswith("/api/volume"):
