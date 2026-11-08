@@ -811,13 +811,28 @@ function showModes(d){
 }
 
 const volBox = document.getElementById("vol");
-let volTouched = 0;
+let volTouched = 0, volKnown = false;
 volBox.addEventListener("input", () => {
   volTouched = Date.now();
   document.getElementById("volnum").textContent =
     Math.round(volBox.value / 255 * 100) + "%";
   fetch("/api/volume", {method:"POST", body: JSON.stringify({level: +volBox.value})});
 });
+
+// Колесо мыши над шапкой и над левой частью с тегами крутит громкость на
+// 5% за щелчок. Над плейлистом справа колесо по-прежнему прокручивает его.
+function wheelVolume(e){
+  if (!e.deltaY) return;
+  e.preventDefault();
+  // До первого ответа плеера ползунок стоит на 255 по умолчанию, и шаг
+  // от него выкрутил бы звук почти на максимум.
+  if (!volKnown) return;
+  const step = Math.round(255 * 0.05) * (e.deltaY < 0 ? 1 : -1);
+  volBox.value = Math.max(0, Math.min(255, +volBox.value + step));
+  volBox.dispatchEvent(new Event("input"));
+}
+for (const el of [document.querySelector("header"), document.getElementById("main")])
+  el.addEventListener("wheel", wheelVolume, {passive: false});
 
 const seekBox = document.getElementById("seek");
 let seekTouched = 0, seekLen = 0;
@@ -923,6 +938,7 @@ async function poll(){
     // Ползунки не трогаем секунду после того, как их двигали руками,
     // иначе они дёргаются назад на ответе плеера.
     if (d.volume != null && Date.now() - volTouched > 1000){
+      volKnown = true;
       volBox.value = d.volume;
       document.getElementById("volnum").textContent =
         Math.round(d.volume / 255 * 100) + "%";

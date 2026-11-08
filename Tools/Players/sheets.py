@@ -201,7 +201,6 @@ HUMAN_RACE = SU + "/race/81-human/"
 DWARF_RACE = SU + "/race/78-dwarf/"
 ELF_RACE = SU + "/race/79-elf/"
 HALF_ELF_RACE = SU + "/race/84-half-elf/"
-TIEFLING_NOW = "Заговор [[thaumaturgy|Чудотворство]] колдуется Харизмой, без ячеек."
 
 
 def prepare_block(cls, max_level, title="Что можно подготовить"):
@@ -234,8 +233,6 @@ SHEETS = {
         "Друидический язык": dru("feature.druidic"),
         "Дух дикого огня": dru("circle.wildfire"),
         "Магия друида": dru("feature.spellcasting"),
-    }, override={
-        "Адское наследие": TIEFLING_NOW,
     }, tail=prepare_block("druid", 1)),
 
     "Эдрик": lambda: sheet("Эдрик", "ranger", HUMAN_RACE, {
@@ -281,8 +278,6 @@ SHEETS = {
         "Скрытая атака": rog("feature.sneak-attack"),
         "Экспертиза": rog("feature.expertise"),
         "Хитрое действие": rog("feature.cunning-action"),
-    }, override={
-        "Адское наследие": TIEFLING_NOW,
     }),
 }
 
