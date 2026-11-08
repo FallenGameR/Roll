@@ -283,35 +283,45 @@ SHEETS = {
 
 
 def render(names):
+    """Печать в два прохода: заведомо длинный лист для замера, потом лист ровно по тексту.
+
+    Обрезать готовый PDF нельзя: у страницы остаётся рамка не от нуля, и просмотрщик
+    Обсидиана открывает такой файл с конца.
+    """
+    import fitz
     edge = next(e for e in EDGES if os.path.exists(e))
     OUT.mkdir(parents=True, exist_ok=True)
     tmp = CACHE / "html"
     tmp.mkdir(parents=True, exist_ok=True)
-    for name in names:
-        src = tmp / f"sheet-{name}.html"
-        src.write_text(SHEETS[name](), encoding="utf-8")
-        pdf = OUT / f"{name}.pdf"
+
+    def edge_print(doc, src, pdf):
+        src.write_text(doc, encoding="utf-8")
         subprocess.run([edge, "--headless", "--disable-gpu", "--no-pdf-header-footer",
                         "--generate-pdf-document-outline", f"--print-to-pdf={pdf}", src.as_uri()],
                        check=True, capture_output=True)
-        trim(pdf)
+
+    for name in names:
+        doc = SHEETS[name]()
+        src = tmp / f"sheet-{name}.html"
+        probe = tmp / f"sheet-{name}.probe.pdf"
+        edge_print(doc, src, probe)
+        d = fitz.open(probe)
+        if d.page_count != 1:
+            raise SystemExit(f"{name}: лист не влез в 2000 мм, увеличь высоту @page")
+        bottom = max(b[3] for b in d[0].get_text("blocks"))
+        d.close()
+        probe.unlink()
+        pdf = OUT / f"{name}.pdf"
+        height = (bottom + 12) / 72 * 25.4
+        for _ in range(5):
+            edge_print(doc.replace("size: 90mm 2000mm", f"size: 90mm {height:.1f}mm"), src, pdf)
+            with fitz.open(pdf) as d:
+                if d.page_count == 1:
+                    break
+            height += 5
+        else:
+            raise SystemExit(f"{name}: не удалось уложить лист в одну страницу")
         print(pdf)
-
-
-def trim(pdf):
-    """Страница печатается заведомо длинной, одной; здесь она обрезается по низу текста."""
-    import fitz
-    d = fitz.open(pdf)
-    if d.page_count != 1:
-        raise SystemExit(f"{pdf}: страниц {d.page_count}, лист не влез в одну, увеличь высоту @page")
-    pg = d[0]
-    bottom = max(b[3] for b in pg.get_text("blocks"))
-    full = pg.mediabox  # в координатах PDF ось Y идёт снизу вверх, текст у верхнего края
-    pg.set_mediabox(fitz.Rect(0, full.y1 - bottom - 12, full.x1, full.y1))
-    tmp = pdf.with_suffix(".tmp.pdf")
-    d.save(tmp, garbage=3, deflate=True)
-    d.close()
-    os.replace(tmp, pdf)
 
 
 if __name__ == "__main__":
