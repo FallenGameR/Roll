@@ -13,6 +13,7 @@ PDF ложится в `Adventure/Players/Sheets/<имя файла карточ�
 """
 import base64
 import html
+import json
 import os
 import re
 import subprocess
@@ -54,7 +55,9 @@ table.stats td { padding: 0; white-space: nowrap; font-size: 9.5pt; }
 .trait > .n { font-weight: 700; font-style: italic; color: #7a200d; margin-right: 1mm; }
 .trait > .n a { font-weight: 700; }
 .trait i { font-style: italic; }
-.slot { font-style: normal; display: inline-block; }
+.slot { font-style: normal; white-space: nowrap; }
+.nw { white-space: nowrap; }
+.row { display: block; font-style: normal; font-size: 12pt; letter-spacing: 1pt; margin: 0.5mm 0; }
 h2 { font-family: Georgia, 'Times New Roman', serif; font-variant: small-caps; font-weight: 400;
      font-size: 15pt; color: #7a200d; border-bottom: 1px solid #7a200d; margin: 4mm 0 1.5mm;
      padding-bottom: 0.3mm; break-after: avoid; }
@@ -104,7 +107,11 @@ def md(text):
 def _plain(s):
     s = html.escape(s)
     s = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", s)
-    return re.sub(r"([◯①-⑨])", r'<span class="slot">\1</span>', s)
+    s = re.sub(r"(?i)(спелл-слот\w*)", r'<span class="nw">\1</span>', s)
+    # запас спелл-слотов: каждый круг своей строкой, точка после него не нужна
+    s = re.sub(r"\s*(([①-⑨])\2*)[.;]?\s*", r'<span class="row">\1</span>', s)
+    s = re.sub(r" (?=[◯❶-❾])", "\u00a0", s)
+    return re.sub(r"(([◯❶-❾])\2*)", r'<span class="slot">\1</span>', s)
 
 
 def line(label, value):
@@ -113,16 +120,16 @@ def line(label, value):
 
 def trait(item, links, override):
     name = item["name"]
-    key = re.sub(r"[◯①-⑨]", "", WIKI.sub(lambda m: m.group(2) or m.group(1), name)).split(":")[0].strip()
+    key = re.sub(r"[◯①-⑨❶-❾]", "", WIKI.sub(lambda m: m.group(2) or m.group(1), name)).split(":")[0].strip()
     desc = override.get(key, item["desc"])
     if desc is None:
         return ""
     if key in links:
-        slots = "".join(re.findall(r"[◯①-⑨]", name))
-        bare = re.sub(r"\s*[◯①-⑨]", "", name)
+        slots = "".join(re.findall(r"[◯①-⑨❶-❾]", name))
+        bare = re.sub(r"\s*[◯①-⑨❶-❾]", "", name)
         n = f'<a href="{html.escape(links[key])}">{md(bare)}</a>'
         if slots:
-            n += " " + _plain(slots)
+            n += "\u00a0" + _plain(slots)
     else:
         n = md(name)
     return f'<div class="trait"><span class="n">{n}</span> {md(desc)}</div>'
@@ -139,12 +146,14 @@ def statblock(card):
     return yaml.safe_load(block)
 
 
-def sheet(card, cls, race_url, links, tail="", override=None):
+def sheet(card, cls, race_url, links, tail="", override=None, item_notes=None):
     """`override` - текст умения для листа вместо текста карточки, None убирает умение.
 
     Нужен там, где карточка пишет Мастеру о будущих уровнях: в листе только то, что есть сейчас.
+    `item_notes` - текст вещи вместо первого абзаца её карточки, по имени файла вещи.
     """
     override = override or {}
+    sync_card_items(card, item_notes or {})
     sb = statblock(card)
     level = int(frontmatter(card)["level"])
     img = "data:image/png;base64," + base64.b64encode((VAULT / sb["image"]).read_bytes()).decode()
@@ -187,8 +196,90 @@ def sheet(card, cls, race_url, links, tail="", override=None):
     if sb.get("reactions"):
         parts.append('<h2 id="reactions">Реакции</h2>')
         parts += [trait(x, links, override) for x in sb["reactions"]]
+    parts.append(items_block(card, item_notes or {}))
     return (f'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>{html.escape(sb["name"])}</title>'
             f'<style>{CSS}</style></head><body>' + "".join(parts) + tail + "</body></html>")
+
+
+ITEMS = VAULT / "DnD Lists n Rules" / "Items"
+_items_raw = None
+
+
+def item_url(card_fm):
+    """Страница вещи на dnd.su по английскому имени из `aliases` карточки, иначе поиск."""
+    global _items_raw
+    if _items_raw is None:
+        from levelup_lib import REFRESH, _fetch
+        _items_raw = {s.split(",")[1].strip().lower(): h for s, h in
+                      re.findall(r"data-search='([^']*)'[^>]*>\s*<a href='([^']+)'", _fetch("/piece/items/index-list/", REFRESH))
+                      if s.count(",") >= 1}
+    en = (card_fm.get("aliases") or [""])[0]
+    for key in (en.lower(), re.sub(r"\s*\(.*\)$", "", en).lower()):
+        if key in _items_raw:
+            return SU + _items_raw[key]
+    return f"{SU}/items/?search={card_fm.get('name', '')}"
+
+
+def item_text(body):
+    """Первый абзац прозы карточки вещи: без заголовка, курсивной строки типа и списков."""
+    for para in re.split(r"\n\s*\n", body):
+        p = para.strip()
+        if not p or p.startswith(("#", "*", "-", ">", "|", "!")):
+            continue
+        return p
+    return ""
+
+
+def owned_items(card, notes):
+    """Вещи, у которых в поле `owner` стоит этот персонаж. Расходники - кружками по числу штук."""
+    out = []
+    for f in sorted(ITEMS.glob("*.md")):
+        t = f.read_text(encoding="utf-8")
+        if "\nowner:" not in t:
+            continue
+        head, body = t.split("\n---\n", 1)
+        fm = yaml.safe_load(head[4:])
+        count = sum(1 for o in fm.get("owner") or [] if re.match(rf"\[\[{re.escape(card)}(\||\]\])", o))
+        if not count:
+            continue
+        tags = " ".join(fm.get("tags") or [])
+        consumable = "/potion" in tags or "/scroll" in tags
+        out.append({"stem": f.stem, "name": fm.get("name", f.stem), "fm": fm,
+                    "mark": " " + "◯" * count if consumable else (f" ×{count}" if count > 1 else ""),
+                    "desc": notes.get(f.stem, fm.get("short") or item_text(body))})
+    return out
+
+
+def items_block(card, notes):
+    rows = [f'<div class="trait"><span class="n"><a href="{html.escape(item_url(i["fm"]))}">'
+            f'{html.escape(i["name"])}</a>{_plain(i["mark"])}</span> {md(i["desc"])}</div>'
+            for i in owned_items(card, notes)]
+    return ('<h2 id="items">Предметы</h2>' + "".join(rows)) if rows else ""
+
+
+def sync_card_items(card, notes):
+    """Переписывает ключ `items` в статблоке карточки по полю `owner` вещей.
+
+    Статблок рисует их разделом "Предметы" макета "Лист игрока"; других ключей не трогает.
+    """
+    f = PLAYERS / f"{card}.md"
+    t = f.read_text(encoding="utf-8")
+    m = re.search(r"```statblock\n(.*?)\n```", t, re.S)
+    blk = re.sub(r'(?m)^"items":\n(?:  [^\n]*\n?)*', "", m.group(1) + "\n").rstrip("\n")
+    before = yaml.safe_load(m.group(1))
+    lines = []
+    for i in owned_items(card, notes):
+        link = f"[[{i['stem']}]]" if i["stem"] == i["name"] else f"[[{i['stem']}|{i['name']}]]"
+        lines.append(f'  - "desc": {json.dumps(i["desc"], ensure_ascii=False)}')
+        lines.append(f'    "name": {json.dumps(link + i["mark"], ensure_ascii=False)}')
+    if lines:
+        blk += '\n"items":\n' + "\n".join(lines)
+    after = yaml.safe_load(blk)
+    assert {k: v for k, v in after.items() if k != "items"} == {k: v for k, v in before.items() if k != "items"}
+    t2 = t[:m.start(1)] + blk + t[m.end(1):]
+    if t2 != t:
+        with open(f, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(t2)
 
 
 def dru(anchor):
@@ -251,7 +342,7 @@ SHEETS = {
         "Наложение рук": pal("feature.lay-on-hands"),
         "Защита": pal("feature.fighting-style"),
     }, override={
-        "Магия паладина": "Ячейки: ①①. После долгого отдыха готовит три заклинания 1-го круга из списка ниже.",
+        "Магия паладина": "Спелл-слоты: ①①. После долгого отдыха готовит три заклинания 1-го круга из списка ниже.",
     }, tail=prepare_block("paladin", 1)),
 
     "Эйра": lambda: sheet("Эйра", "bard", ELF_RACE, {
@@ -262,7 +353,10 @@ SHEETS = {
         "Песнь отдыха": bard("feature.song-of-rest"),
         "Транс": ELF_RACE,
         "Вдохновение барда": bard("feature.bardic-inspiration"),
-    }, tail=prepare_block("bard", 1, LEARN)),
+    }, tail=prepare_block("bard", 1, LEARN), item_notes={
+        "Свиток заклинания (2 уровень)": "На свитке [[find-traps|Поиск ловушек]]. Бард его не прочтёт, "
+                                         "прочтут Кали и Эдрик.",
+    }),
 
     "Ириван": lambda: sheet("Ириван", "sorcerer", HALF_ELF_RACE, {
         "Волна дикой магии": sor("origin.wild-magic"),
@@ -321,7 +415,66 @@ def render(names):
             height += 5
         else:
             raise SystemExit(f"{name}: не удалось уложить лист в одну страницу")
+        add_checkboxes(pdf)
         print(pdf)
+
+
+TRACKERS = set("◯①②③④⑤⑥⑦⑧⑨")
+STRIKE_RGB = "0.573 0.149 0.063"  # #922610, цвет разделителей статблока
+
+
+def strike(d, w):
+    """Включённое состояние флажка - толстый красный крест поверх кружка, а не галочка."""
+    kind, ref = d.xref_get_key(w.xref, "AP/N/Yes")
+    xref = int(ref.split()[0])
+    bbox = [float(v) for v in d.xref_get_key(xref, "BBox")[1].strip("[] ").split()]
+    x0, y0, x1, y1 = bbox
+    k = (x1 - x0) * 0.18
+    a, b, c, e = x0 + k, y0 + k, x1 - k, y1 - k
+    lw = (x1 - x0) * 0.16
+    d.update_stream(xref, (f"q {STRIKE_RGB} RG {lw:.2f} w 1 J "
+                           f"{a:.2f} {b:.2f} m {c:.2f} {e:.2f} l S "
+                           f"{a:.2f} {e:.2f} m {c:.2f} {b:.2f} l S Q").encode())
+    d.xref_set_key(xref, "Resources", "<<>>")
+
+
+def add_checkboxes(pdf):
+    """Кладёт флажок формы на каждый пустой кружок-трекер: тап по нему ставит отметку.
+
+    Залитые ❶ - цена заклинания, их не отмечают, флажков на них нет.
+    """
+    import fitz
+    d = fitz.open(pdf)
+    pg = d[0]
+    n = 0
+    for b in pg.get_text("rawdict")["blocks"]:
+        for ln in b.get("lines", []):
+            for sp in ln["spans"]:
+                for ch in sp["chars"]:
+                    if ch["c"] not in TRACKERS:
+                        continue
+                    r = fitz.Rect(ch["bbox"])
+                    side = min(r.width, r.height) * 0.9
+                    c = fitz.Point((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2)
+                    w = fitz.Widget()
+                    w.field_type = fitz.PDF_WIDGET_TYPE_CHECKBOX
+                    w.field_name = f"slot-{n}"
+                    w.rect = fitz.Rect(c.x - side / 2, c.y - side / 2, c.x + side / 2, c.y + side / 2)
+                    w.border_width = 0
+                    w.border_color = None
+                    w.fill_color = None
+                    w.text_color = (0x92 / 255, 0x26 / 255, 0x10 / 255)
+                    w.button_caption = "l"
+                    w.field_value = False
+                    pg.add_widget(w)
+                    n += 1
+    for w in pg.widgets():
+        strike(d, w)
+    tmp = pdf.with_suffix(".tmp.pdf")
+    d.save(tmp, garbage=1, deflate=True)
+    d.close()
+    os.replace(tmp, pdf)
+    return n
 
 
 if __name__ == "__main__":
