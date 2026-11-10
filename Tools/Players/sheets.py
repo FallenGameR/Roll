@@ -231,17 +231,16 @@ def item_text(body):
 
 
 def owned_items(card, notes):
-    """Вещи, у которых в поле `owner` стоит этот персонаж. Расходники - кружками по числу штук."""
+    """Вещи из списка `items` в шапке персонажа. Повтор ссылки - ещё одна штука; расходники - кружками."""
     out = []
-    for f in sorted(ITEMS.glob("*.md")):
-        t = f.read_text(encoding="utf-8")
-        if "\nowner:" not in t:
-            continue
-        head, body = t.split("\n---\n", 1)
+    counts = {}
+    for link in frontmatter(card).get("items") or []:
+        stem = re.match(r"\[\[([^\]|#]+)", link).group(1).strip()
+        counts[stem] = counts.get(stem, 0) + 1
+    for stem, count in counts.items():
+        f = ITEMS / f"{stem}.md"
+        head, body = f.read_text(encoding="utf-8").split("\n---\n", 1)
         fm = yaml.safe_load(head[4:])
-        count = sum(1 for o in fm.get("owner") or [] if re.match(rf"\[\[{re.escape(card)}(\||\]\])", o))
-        if not count:
-            continue
         tags = " ".join(fm.get("tags") or [])
         consumable = "/potion" in tags or "/scroll" in tags
         out.append({"stem": f.stem, "name": fm.get("name", f.stem), "fm": fm,
@@ -258,7 +257,7 @@ def items_block(card, notes):
 
 
 def sync_card_items(card, notes):
-    """Переписывает ключ `items` в статблоке карточки по полю `owner` вещей.
+    """Переписывает ключ `items` в статблоке карточки по списку `items` в её шапке.
 
     Статблок рисует их разделом "Предметы" макета "Лист игрока"; других ключей не трогает.
     """
