@@ -30,7 +30,7 @@ import sys
 import lzstring
 
 VAULT = r"C:\vaults\Рудники Фанделвера"
-PLAYERS = os.path.join(VAULT, "Adventure", "Players")
+PLAYERS = os.path.join(VAULT, "Adventure", "Players", "Characters")
 
 # размер токена на карте, тот же, что в make-player-tokens.py
 W, H = 38.52975918257891, 39.312

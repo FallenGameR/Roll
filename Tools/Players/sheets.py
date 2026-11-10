@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Лист персонажа под телефон, свёрстанный как статблок в Обсидиане.
 
-Источник один: блок ```statblock``` карточки персонажа в `Adventure/Players`. Лист
+Источник один: блок ```statblock``` карточки персонажа в `Adventure/Players/Characters`. Лист
 повторяет его поле в поле, только вики-ссылки на заклинания превращаются в ссылки на
 dnd.su, а у умений класса и расы появляются ссылки из словаря `links` персонажа.
 Поправили статблок в карточке, перепечатали лист, и они снова совпадают.
@@ -9,7 +9,7 @@ dnd.su, а у умений класса и расы появляются ссы�
 Страница узкая, чтобы читалась на телефоне; у PDF есть закладки по разделам.
 
 Запуск: `python sheets.py [имя файла персонажа ...]`, без имён печатает всех из SHEETS.
-PDF ложится в `Adventure/Players/Sheets/<имя файла карточки>.pdf`.
+PDF ложится в `Adventure/Players/Characters/Sheets/<имя файла карточки>.pdf`.
 """
 import base64
 import html
@@ -23,7 +23,7 @@ import yaml
 
 from levelup_lib import CACHE, EDGES, SPELLS, SU, VAULT, cls_url, spell_grid, spells, SPELL_NOTE
 
-PLAYERS = VAULT / "Adventure" / "Players"
+PLAYERS = VAULT / "Adventure" / "Players" / "Characters"
 OUT = PLAYERS / "Sheets"
 
 ABIL = ["Сил", "Лов", "Тел", "Инт", "Мдр", "Хар"]

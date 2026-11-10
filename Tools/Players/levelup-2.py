@@ -2,7 +2,7 @@
 """Раздатки на второй уровень для отряда "Рудников Фанделвера".
 
 Использование:
-    python levelup-2.py            # PDF в Adventure/Players/Levelup/Уровень 2
+    python levelup-2.py            # PDF в Adventure/Players/Characters/Levelup/Уровень 2
     python levelup-2.py --refresh  # заодно перекачать индексы dnd.su
 
 Тексты под каждого персонажа лежат здесь, общая вёрстка и ссылки в

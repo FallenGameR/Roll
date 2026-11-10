@@ -10,7 +10,7 @@
   * `sp(en)` и `beast(en)` - ссылка на заклинание или зверя по английскому имени;
   * `table`, `ul`, `h2`, `p`, `spell_grid`, `page` - кирпичи HTML-страницы;
   * `render(docs, level)` - печатает словарь {персонаж: html} в
-    `Adventure/Players/Levelup/Уровень N/<персонаж>.pdf` через Edge.
+    `Adventure/Players/Characters/Levelup/Уровень N/<персонаж>.pdf` через Edge.
 
 Индексы dnd.su. Страницы списков на сайте пустые и подгружают содержимое
 скриптом, поэтому качаются сами куски `/piece/spells/index-list/` и
@@ -37,7 +37,7 @@ import urllib.request
 
 SU = "https://dnd.su"
 VAULT = pathlib.Path(r"C:\vaults\Рудники Фанделвера")
-OUT_ROOT = VAULT / "Adventure" / "Players" / "Levelup"
+OUT_ROOT = VAULT / "Adventure" / "Players" / "Characters" / "Levelup"
 CACHE = pathlib.Path(tempfile.gettempdir()) / "dndsu"
 EDGES = [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
          r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"]
