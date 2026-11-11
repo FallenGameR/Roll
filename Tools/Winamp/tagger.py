@@ -651,9 +651,11 @@ PAGE = r"""<!doctype html>
  .scene b.x { position:absolute; top:-7px; right:-7px; width:16px; height:16px; line-height:15px;
               text-align:center; font-size:12px; font-weight:normal; border-radius:50%;
               background:#2a2d37; border:1px solid #4a4f5e; color:#b0b4c0; display:none; }
- .scene:hover b.x { display:block; }
+ #scenes.editing .scene b.x { display:block; }
+ #scenes.editing .scene { cursor:default; border-style:dashed; }
+ #scenes.editing .scene:hover { border-color:#333744; }
  .scene b.x:hover { color:#fff; background:#a8434c; border-color:#e06c75; }
- .unhide { padding:10px 8px 0; font-size:12px; color:#7f8596; }
+ .unhide { padding:10px 8px 0; font-size:12px; color:#7f8596; text-align:right; }
  .unhide a { color:#8fb8d8; cursor:pointer; }
 </style></head><body>
 <header>
@@ -1009,7 +1011,7 @@ setInterval(pollPlaylist, 1000); pollPlaylist();
 
 // Селектор сцен: плейлисты медиатеки с точкой в начале имени,
 // сгруппированные по локации (".Фандалин - Бой" -> Фандалин / Бой).
-let scenes = [], sceneNow = "", scenesHidden = 0;
+let scenes = [], sceneNow = "", scenesHidden = 0, editing = false;
 const sceneBox = document.getElementById("scenes"), sceneFind = document.getElementById("scenefind");
 
 async function pollScenes(){
@@ -1040,7 +1042,9 @@ function drawScenes(){
   for (const [place, list] of groups){
     // Темы НПС собраны в свою подгруппу в конце локации, как группы тегов:
     // в кнопке только имя, приставка «НПС - » ушла в подпись.
-    const npc = list.filter(s => s.scene.startsWith("НПС - "));
+    // В режиме правки НПС раскрыты в обычные кнопки: у пункта списка
+    // крестика не поставить.
+    const npc = editing ? [] : list.filter(s => s.scene.startsWith("НПС - "));
     html += `<div class="place"><h3>${esc(place)}</h3>`;
     for (const s of list) if (!npc.includes(s)) html += chip(s, s.scene || place);
     if (npc.length){
@@ -1054,16 +1058,23 @@ function drawScenes(){
     }
     html += `</div>`;
   }
-  if (scenesHidden && !q)
-    html += `<div class="unhide">скрыто плейлистов: ${scenesHidden} · <a id="unhide">вернуть</a></div>`;
+  if (!html) html = '<div class="idle" style="padding:10px 0">ничего не нашлось</div>';
+  html += `<div class="unhide"><a id="editscenes">${editing ? "готово" : "править"}</a>` +
+    (scenesHidden && !q ? ` · скрыто: ${scenesHidden} · <a id="unhide">вернуть</a>` : "") + `</div>`;
   const list = document.getElementById("scenelist");
-  list.innerHTML = html || '<div class="idle" style="padding:10px 0">ничего не нашлось</div>';
+  list.innerHTML = html;
+  sceneBox.classList.toggle("editing", editing);
   list.querySelectorAll(".scene").forEach(el => el.onclick = e => {
     // Перерисовка отрывает цель от документа, и общий обработчик клика
     // принял бы её за клик мимо попапа.
-    if (e.target.matches("b.x")){ e.stopPropagation(); hideScene(el.dataset.t); }
-    else pickScene(el.dataset.t);
+    e.stopPropagation();
+    // В режиме правки кнопка сцену не включает: промах мимо крестика не
+    // должен запускать музыку.
+    if (!editing) pickScene(el.dataset.t);
+    else if (e.target.matches("b.x")) hideScene(el.dataset.t);
   });
+  document.getElementById("editscenes").onclick = e => {
+    e.stopPropagation(); editing = !editing; drawScenes(); };
   const un = document.getElementById("unhide");
   if (un) un.onclick = e => { e.stopPropagation(); hideScene(""); };
   list.querySelectorAll("select.npc").forEach(el => el.onchange = () => el.value && pickScene(el.value));
@@ -1095,14 +1106,14 @@ async function pickScene(title){
 function openScenes(){
   sceneBox.classList.add("open"); sceneFind.value = ""; drawScenes(); sceneFind.focus();
 }
-function closeScenes(){ sceneBox.classList.remove("open"); }
+function closeScenes(){ sceneBox.classList.remove("open"); editing = false; }
 
 document.getElementById("scenebtn").onclick = () =>
   sceneBox.classList.contains("open") ? closeScenes() : openScenes();
 sceneFind.addEventListener("input", drawScenes);
 sceneFind.addEventListener("keydown", e => {
   if (e.key === "Escape") closeScenes();
-  if (e.key === "Enter"){ const hot = document.querySelector("#scenelist .scene.hot");
+  if (e.key === "Enter" && !editing){ const hot = document.querySelector("#scenelist .scene.hot");
     if (hot) pickScene(hot.dataset.t); }
 });
 document.addEventListener("keydown", e => {
