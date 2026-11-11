@@ -386,6 +386,23 @@ def launch_winamp():
 
 CATALOG = Path(os.environ.get("APPDATA", "")) / "Winamp" / "Plugins" / "ml" / "playlists"
 
+# Плейлисты, которые Мастер убрал крестиком из селектора. Убираются только
+# со страницы: медиатеку Winamp не трогаем, иначе Sync-WinampPlaylist счёл
+# бы это удалением сцены. Полный Import-WinampPlaylist их не воскрешает.
+HIDDEN = Path(os.environ.get("LOCALAPPDATA", "")) / "Roll" / "winamp" / "hidden-scenes.txt"
+
+
+def hidden_scenes():
+    if not HIDDEN.is_file():
+        return set()
+    return {line.strip() for line in HIDDEN.read_text(encoding="utf-8").splitlines() if line.strip()}
+
+
+def set_hidden(titles):
+    HIDDEN.parent.mkdir(parents=True, exist_ok=True)
+    with open(HIDDEN, "w", encoding="utf-8", newline="\n") as f:
+        f.write("".join(t + "\n" for t in sorted(titles)))
+
 
 def scenes():
     """Плейлисты медиатеки, чьё имя начинается с точки: их выгружает
@@ -414,13 +431,17 @@ def scenes_state():
     треков, так что кнопка не врёт, даже если плейлист открыли в самом Winamp."""
     items = playlist_state().get("items", [])
     loaded = [i["path"].lower() for i in items]
-    out, current = [], ""
+    out, current, hidden = [], "", hidden_scenes()
+    skipped = 0
     for s in scenes():
         if loaded and [t.lower() for t in s["tracks"]] == loaded:
             current = s["title"]
+        if s["title"] in hidden:
+            skipped += 1
+            continue
         out.append({k: s[k] for k in ("title", "place", "scene", "seconds")}
                    | {"songs": len(s["tracks"])})
-    return {"scenes": out, "current": current}
+    return {"scenes": out, "current": current, "hidden": skipped}
 
 
 def drop_from_scene(queue, index, path):
@@ -606,13 +627,12 @@ PAGE = r"""<!doctype html>
  #scenes input { margin:12px 12px 6px; padding:7px 10px; font:inherit; font-size:14px;
                  background:#15161a; color:#dcdde1; border:1px solid #333744; border-radius:6px; }
  #scenelist { overflow:auto; padding:4px 4px 12px; }
- .place { margin-top:8px; padding:6px 8px 2px; border:1px solid transparent; border-radius:8px; }
+ .place { margin-top:8px; padding:6px 8px 2px; border:1px dashed #3a3f4d; border-radius:8px; }
  .place h3 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
              color:#8b8f9c; margin:0 0 6px; font-weight:600; }
- /* Локация, где играет текущая сцена, подсвечена так же, как группа тегов
-    с отмеченным тегом. Рамка есть у всех групп, но прозрачная, чтобы
-    список не сдвигался. */
- .place:has(.scene.now, select.npc.now) { border-color:#43708f; background:#1a2530; }
+ /* Каждая локация обведена пунктиром, как группа тегов; та, где играет
+    текущая сцена, - сплошной синей рамкой, как группа с отмеченным тегом. */
+ .place:has(.scene.now, select.npc.now) { border-style:solid; border-color:#43708f; background:#1a2530; }
  .place:has(.scene.now, select.npc.now) h3 { color:#b9d3e6; }
  select.npc { margin:0 6px 6px 0; padding:5px 8px; font:inherit; font-size:14px; color:#dcdde1;
               border:1px solid #333744; border-radius:6px; background:#1b1d24; cursor:pointer; }
@@ -625,6 +645,12 @@ PAGE = r"""<!doctype html>
  .scene.now { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
  .scene i { color:#7f8596; font-style:normal; font-size:12px; margin-left:6px; }
  .scene.now i { color:#b9d3e6; }
+ .scene b.x { display:inline-block; width:0; overflow:hidden; vertical-align:top;
+              color:#7f8596; font-weight:normal; transition:width .1s; }
+ .scene:hover b.x { width:1.1em; margin-left:4px; }
+ .scene b.x:hover { color:#e06c75; }
+ .unhide { padding:10px 8px 0; font-size:12px; color:#7f8596; }
+ .unhide a { color:#8fb8d8; cursor:pointer; }
 </style></head><body>
 <header>
   <div class="transport">
@@ -979,13 +1005,13 @@ setInterval(pollPlaylist, 1000); pollPlaylist();
 
 // Селектор сцен: плейлисты медиатеки с точкой в начале имени,
 // сгруппированные по локации (".Фандалин - Бой" -> Фандалин / Бой).
-let scenes = [], sceneNow = "";
+let scenes = [], sceneNow = "", scenesHidden = 0;
 const sceneBox = document.getElementById("scenes"), sceneFind = document.getElementById("scenefind");
 
 async function pollScenes(){
   try {
     const d = await (await fetch("/api/scenes")).json();
-    scenes = d.scenes || []; sceneNow = d.current || "";
+    scenes = d.scenes || []; sceneNow = d.current || ""; scenesHidden = d.hidden || 0;
     document.getElementById("scenename").textContent =
       sceneNow ? sceneNow.slice(1) : (scenes.length ? "свой список" : "нет плейлистов");
     if (sceneBox.classList.contains("open") && !document.activeElement.matches("select.npc")) drawScenes();
@@ -1004,7 +1030,8 @@ function drawScenes(){
   const chip = (s, label) => {
     const cls = "scene" + (s.title === sceneNow ? " now" : "") + (first ? " hot" : "");
     first = false;
-    return `<span class="${cls}" data-t="${esc(s.title)}">${esc(label)}<i>${s.songs}</i></span>`;
+    return `<span class="${cls}" data-t="${esc(s.title)}">${esc(label)}<i>${s.songs}</i>` +
+      `<b class="x" title="убрать из списка (в Winamp останется)">×</b></span>`;
   };
   for (const [place, list] of groups){
     // Темы НПС собраны в свою подгруппу в конце локации, как группы тегов:
@@ -1023,10 +1050,30 @@ function drawScenes(){
     }
     html += `</div>`;
   }
+  if (scenesHidden && !q)
+    html += `<div class="unhide">скрыто плейлистов: ${scenesHidden} · <a id="unhide">вернуть</a></div>`;
   const list = document.getElementById("scenelist");
   list.innerHTML = html || '<div class="idle" style="padding:10px 0">ничего не нашлось</div>';
-  list.querySelectorAll(".scene").forEach(el => el.onclick = () => pickScene(el.dataset.t));
+  list.querySelectorAll(".scene").forEach(el => el.onclick = e => {
+    // Перерисовка отрывает цель от документа, и общий обработчик клика
+    // принял бы её за клик мимо попапа.
+    if (e.target.matches("b.x")){ e.stopPropagation(); hideScene(el.dataset.t); }
+    else pickScene(el.dataset.t);
+  });
+  const un = document.getElementById("unhide");
+  if (un) un.onclick = e => { e.stopPropagation(); hideScene(""); };
   list.querySelectorAll("select.npc").forEach(el => el.onchange = () => el.value && pickScene(el.value));
+}
+
+// Пустой title возвращает все скрытые.
+async function hideScene(title){
+  try {
+    const j = await (await fetch("/api/hide", {method:"POST", body: JSON.stringify({title})})).json();
+    if (!j.ok) return setState("ошибка: " + j.error, "failed");
+    if (title){ scenes = scenes.filter(s => s.title !== title); scenesHidden++; drawScenes(); }
+    else { await pollScenes(); drawScenes(); }
+    sceneFind.focus();
+  } catch(e){ setState("ошибка: " + e, "failed"); }
 }
 
 async function pickScene(title){
@@ -1157,6 +1204,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.path.startswith("/api/launch"):
                 launch_winamp()
+                self._send(200, json.dumps({"ok": True}))
+                return
+            if self.path.startswith("/api/hide"):
+                titles = hidden_scenes()
+                if payload.get("title"):
+                    titles.add(payload["title"])
+                else:
+                    titles = set()
+                set_hidden(titles)
                 self._send(200, json.dumps({"ok": True}))
                 return
             if self.path.startswith("/api/scene"):
