@@ -10,9 +10,10 @@
 Что переносится:
 
 * трек удалён из плейлиста -> строка убирается из соответствующей
-  сцены;
+  сцены, а пара «плейлист, трек» дописывается в журнал отказов
+  Music\\Rejected.csv, чтобы при подборе трек не вернули туда же;
 * плейлист удалён целиком -> убирается вся сцена (для ситуации или
-  эффекта это одна строка);
+  эффекта это одна строка), её треки тоже идут в журнал;
 * тег Meta:Delete -> послушали, не понравилось: mp3 уезжает в
   Music\\Deleted, ссылки на него исчезают из файлов кампании;
 * тег Meta:Excluded -> отложен на потом: то же самое, но в
@@ -47,6 +48,7 @@ ROOT = Path(r"C:\vaults\Рудники Фанделвера")
 MUSIC = Path(r"C:\vaults\Music")
 DELETED = MUSIC / "Deleted"
 PLAYLISTS = MUSIC / "_playlists"
+REJECTED = MUSIC / "Rejected.csv"
 CATALOG = Path(os.environ["APPDATA"]) / r"Winamp\Plugins\ml\playlists"
 
 head = re.compile(r"^(#{1,6})\s+(.*)$")
@@ -261,7 +263,22 @@ def repath_track_everywhere(files, old_path, new_path, apply):
             write_lines(md, lines)
     if apply:
         count += repath_playlists(old_path, new_path)
+        repath_rejected(old_path, new_path)
     return count
+
+
+def repath_rejected(old_path, new_path):
+    """Тот же переезд в журнале отказов: Export-Playlist сверяет по полному
+    пути, и отказ со старым путём из Unsorted молча перестал бы работать.
+    Регистр не учитывается: журнал местами пишут руками."""
+    if not REJECTED.exists():
+        return
+    raw = REJECTED.read_bytes()
+    bom = raw.startswith(b"\xef\xbb\xbf")
+    text = raw[3:].decode("utf-8") if bom else raw.decode("utf-8")
+    fixed = re.sub(re.escape(old_path), lambda _m: new_path, text, flags=re.IGNORECASE)
+    if fixed != text:
+        REJECTED.write_bytes((b"\xef\xbb\xbf" if bom else b"") + fixed.encode("utf-8"))
 
 
 def repath_playlists(old_path, new_path):
@@ -526,17 +543,42 @@ def read_exported():
     Плейлиста нет в каталоге по обеим причинам, а последствия разные:
     в первом случае сцену надо убрать, во втором - это свежая работа,
     и трогать её нельзя.
+
+    Третье значение - путь -> имена списков, где он лежит: по нему журнал
+    отказов узнаёт название плейлиста ситуации или эффекта, у которых в
+    разделе музыки нет своего заголовка.
     """
-    names, paths = set(), set()
+    names, paths, where = set(), set(), {}
     if not PLAYLISTS.exists():
-        return names, paths
+        return names, paths, where
     for m3u in PLAYLISTS.glob("*.m3u8"):
         names.add(m3u.stem)
         for line in m3u.read_text(encoding="utf-8-sig").splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
                 paths.add(line.lower())
-    return names, paths
+                where.setdefault(line.lower(), []).append(m3u.stem)
+    return names, paths, where
+
+
+def log_rejected(rows):
+    """Дописывает отказы Мастера в Music\\Rejected.csv.
+
+    Удаление трека из сцены в плеере - решение «сюда не подходит». Без
+    журнала оно пропадает вместе со строкой в markdown, и при следующем
+    подборе тот же трек возвращается в ту же сцену. Формат как у
+    остальных csv в Music: UTF-8 с BOM, CRLF.
+    """
+    import csv
+    import datetime
+    new = not REJECTED.exists()
+    today = datetime.date.today().isoformat()
+    with open(REJECTED, "a", encoding="utf-8-sig" if new else "utf-8", newline="") as f:
+        out = csv.writer(f, lineterminator="\r\n")
+        if new:
+            out.writerow(["Date", "Playlist", "Track"])
+        for playlist, path in rows:
+            out.writerow([today, playlist, path])
 
 
 def main():
@@ -547,7 +589,7 @@ def main():
         print("каталог Winamp пуст - нечего синхронизировать")
         return
 
-    exported_names, exported_paths = read_exported()
+    exported_names, exported_paths, exported_where = read_exported()
 
     # Все пути, которые плеер сейчас знает.
     alive = set()
@@ -556,6 +598,7 @@ def main():
 
     skipped = []
     removed = 0
+    rejected = []
     for md, data in files.items():
         if "Done" in md.parts:
             # Отыгранные локации в плеер не выгружаются, поэтому отсутствие
@@ -594,6 +637,9 @@ def main():
                     if (path.lower() not in local_single
                             and path.lower() in exported_paths):
                         drop.add(index)
+                        own = [n for n in exported_where.get(path.lower(), [])
+                               if n.startswith(f"{base} - ")]
+                        rejected.append((own[0] if own else f"{base} - {scene}", path))
                 continue
             if title not in catalog:
                 if title not in exported_names:
@@ -604,8 +650,9 @@ def main():
                     continue
                 # Плейлист удалён целиком - убираем сцену вместе с
                 # заголовком.
-                for index, _path in items:
+                for index, path in items:
                     drop.add(index)
+                    rejected.append((title, path))
                 if scene in data["headers"]:
                     drop.add(data["headers"][scene])
                 continue
@@ -613,6 +660,7 @@ def main():
             for index, path in items:
                 if path.lower() not in known:
                     drop.add(index)
+                    rejected.append((title, path))
 
         if not drop:
             continue
@@ -622,6 +670,12 @@ def main():
             remove_lines(md, data, drop)
 
     print(f"строк к удалению: {removed}")
+    if rejected:
+        print(f"в журнал отказов {REJECTED.name}: {len(rejected)}")
+        for playlist, path in rejected:
+            print(f"  {playlist}: {Path(path).stem}")
+        if apply:
+            log_rejected(rejected)
     if skipped:
         print(f"не выгружалось в плеер, не трогаю: {len(skipped)}")
         for title in sorted(skipped):

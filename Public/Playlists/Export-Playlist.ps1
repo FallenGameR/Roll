@@ -14,6 +14,10 @@
     `location` ведёт на эту страницу: каждая едет отдельным списком
     `<Локация> - НПС - <Имя>`.
 
+    Треки, которые Мастер уже выкидывал из этого же списка в плеере (журнал
+    Music\Rejected.csv ведёт Sync-WinampPlaylist), выгружаются с
+    предупреждением.
+
 .PARAMETER Path
     Файл кампании с разделом музыки.
 
@@ -134,6 +138,10 @@ function Export-Playlist {
         $null = New-Item -ItemType Directory -Path $Destination -Force
     }
 
+    # Что Мастер уже выкидывал из сцен: такие треки выгружаются с
+    # предупреждением, чтобы не вернуть их туда незаметно.
+    $rejected = Get-RejectedTrack
+
     foreach ($key in $scenes.Keys) {
         if ($Scene -and $key -notin $Scene) { continue }
 
@@ -148,20 +156,20 @@ function Export-Playlist {
                         else { 'Эффект' }
                 $title = "$name - $kind - $($label.Text)"
                 Write-PlaylistFile -Title $title -Tracks @($scenes[$key][$i]) `
-                    -Destination $Destination
+                    -Destination $Destination -Rejected $rejected
             }
             continue
         }
 
         $title = if ($key) { "$name - $key" } else { $name }
         Write-PlaylistFile -Title $title -Tracks $scenes[$key] `
-            -Destination $Destination
+            -Destination $Destination -Rejected $rejected
     }
 
     if (-not $Scene -or 'НПС' -in $Scene) {
         foreach ($npc in $npcs.Keys) {
             Write-PlaylistFile -Title "$name - НПС - $npc" -Tracks $npcs[$npc] `
-                -Destination $Destination
+                -Destination $Destination -Rejected $rejected
         }
     }
 }

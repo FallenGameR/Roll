@@ -80,11 +80,24 @@ function Write-PlaylistFile {
     param(
         [string] $Title,
         [string[]] $Tracks,
-        [string] $Destination
+        [string] $Destination,
+        [hashtable] $Rejected = @{}
     )
 
     $safe = $Title -replace '[\\/:*?"<>|]', '-'
     $target = Join-Path $Destination "$safe.m3u8"
+
+    # Трек, который Мастер уже выкидывал из этого списка, выгружается всё
+    # равно: решать ему, а не скрипту. Но вслепую он туда не вернётся.
+    $refused = $Rejected[$Title]
+    if ($refused) {
+        foreach ($track in $Tracks) {
+            if ($refused.Contains($track.ToLowerInvariant())) {
+                Write-Warning ("$Title`: Мастер уже убирал отсюда " +
+                    [System.IO.Path]::GetFileNameWithoutExtension($track))
+            }
+        }
+    }
 
     $content = [System.Collections.ArrayList]::new()
     $null = $content.Add('#EXTM3U')
