@@ -602,10 +602,22 @@ PAGE = r"""<!doctype html>
  #scenes.open { display:flex; }
  #scenes input { margin:12px 12px 6px; padding:7px 10px; font:inherit; font-size:14px;
                  background:#15161a; color:#dcdde1; border:1px solid #333744; border-radius:6px; }
- #scenelist { overflow:auto; padding:4px 12px 12px; }
- .place { margin-top:10px; }
+ #scenelist { overflow:auto; padding:4px 4px 12px; }
+ .place { margin-top:8px; padding:6px 8px 2px; border:1px solid transparent; border-radius:8px; }
  .place h3 { font-size:12px; text-transform:uppercase; letter-spacing:.09em;
              color:#8b8f9c; margin:0 0 6px; font-weight:600; }
+ /* Локация, где играет текущая сцена, подсвечена так же, как группа тегов
+    с отмеченным тегом. Рамка есть у всех групп, но прозрачная, чтобы
+    список не сдвигался. */
+ .place:has(.scene.now) { border-color:#43708f; background:#1a2530; }
+ .place:has(.scene.now) h3 { color:#b9d3e6; }
+ .place .sub { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 6px;
+               margin:0 6px 6px 0; border:1px dashed #3a3f4d; border-radius:8px; }
+ .place .sub > b { font-size:11px; font-weight:400; text-transform:uppercase; letter-spacing:.08em;
+                   color:#8b8f9c; margin:0 2px 0 4px; }
+ .place .sub .scene { margin:0; }
+ .place .sub:has(.scene.now) { border:1px solid #43708f; background:#1d2a36; }
+ .place .sub:has(.scene.now) > b { color:#b9d3e6; }
  .scene { display:inline-block; margin:0 6px 6px 0; padding:5px 10px; font-size:14px;
           border:1px solid #333744; border-radius:6px; background:#1b1d24; cursor:pointer; }
  .scene:hover, .scene.hot { border-color:#5aa7d8; }
@@ -988,14 +1000,19 @@ function drawScenes(){
     groups.get(s.place).push(s);
   }
   let html = "", first = true;
+  const chip = (s, label) => {
+    const cls = "scene" + (s.title === sceneNow ? " now" : "") + (first ? " hot" : "");
+    first = false;
+    return `<span class="${cls}" data-t="${esc(s.title)}">${esc(label)}<i>${s.songs}</i></span>`;
+  };
   for (const [place, list] of groups){
+    // Темы НПС собраны в свою подгруппу в конце локации, как группы тегов:
+    // в кнопке только имя, приставка «НПС - » ушла в подпись.
+    const npc = list.filter(s => s.scene.startsWith("НПС - "));
     html += `<div class="place"><h3>${esc(place)}</h3>`;
-    for (const s of list){
-      const cls = "scene" + (s.title === sceneNow ? " now" : "") + (first ? " hot" : "");
-      first = false;
-      html += `<span class="${cls}" data-t="${esc(s.title)}">${esc(s.scene || place)}` +
-              `<i>${s.songs}</i></span>`;
-    }
+    for (const s of list) if (!npc.includes(s)) html += chip(s, s.scene || place);
+    if (npc.length)
+      html += `<span class="sub"><b>НПС</b>` + npc.map(s => chip(s, s.scene.slice(6))).join("") + `</span>`;
     html += `</div>`;
   }
   const list = document.getElementById("scenelist");
