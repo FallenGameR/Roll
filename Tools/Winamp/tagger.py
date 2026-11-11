@@ -645,10 +645,14 @@ PAGE = r"""<!doctype html>
  .scene.now { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
  .scene i { color:#7f8596; font-style:normal; font-size:12px; margin-left:6px; }
  .scene.now i { color:#b9d3e6; }
- .scene b.x { display:inline-block; width:0; overflow:hidden; vertical-align:top;
-              color:#7f8596; font-weight:normal; transition:width .1s; }
- .scene:hover b.x { width:1.1em; margin-left:4px; }
- .scene b.x:hover { color:#e06c75; }
+ /* Крестик висит над углом кнопки и не меняет её ширину: иначе кнопка
+    под курсором перескакивала на другую строку и обратно. */
+ .scene { position:relative; }
+ .scene b.x { position:absolute; top:-7px; right:-7px; width:16px; height:16px; line-height:15px;
+              text-align:center; font-size:12px; font-weight:normal; border-radius:50%;
+              background:#2a2d37; border:1px solid #4a4f5e; color:#b0b4c0; display:none; }
+ .scene:hover b.x { display:block; }
+ .scene b.x:hover { color:#fff; background:#a8434c; border-color:#e06c75; }
  .unhide { padding:10px 8px 0; font-size:12px; color:#7f8596; }
  .unhide a { color:#8fb8d8; cursor:pointer; }
 </style></head><body>

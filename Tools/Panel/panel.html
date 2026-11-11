@@ -57,11 +57,11 @@
   .phrase { margin-top: 10px; color: var(--text-color-muted, #666); font-size: 13px; }
   .stage { margin-left: 4px; font-size: 12px; line-height: 16px; height: 32px;
            color: var(--text-color-muted, #666);
-           flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center;
+           flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center;
            align-items: flex-end; text-align: right;
            font-variant-numeric: tabular-nums; }
-  .stage > span { white-space: nowrap; }
-  #d-stage-info { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .stage > span { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  #d-stage-info { max-width: min(220px, 100%); }
   /* Стадия всегда справа от кнопок, без переноса на свою строку. */
   .row.nowrap { flex-wrap: nowrap; }
   .row.nowrap > button { flex: none; }
@@ -168,7 +168,7 @@
       const where = ["CUDA", "GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
       // Рядом - микрофон по умолчанию, с которого пойдёт запись. Windows
       // зовёт их "Microphone (Blue Snowball)", в пульте остаётся суть.
-      const mic = (s.mic ?? "").replace(/^(Microphone|Микрофон)\s*\((.*)\)$/i, "$2");
+      const mic = (s.mic ?? "").replace(/^(?:Microphone(?: Array)?|Микрофон)\s*\((.*)\)$/i, "$1");
       const idle = s.mic === "" ? `нет микрофона · ${where}` : [mic, where].filter(Boolean).join(" · ");
       let info = s.stage === "ready" ? idle : sec(elapsed);
       if (s.stage === "recording" && mic) info = `${mic} · ${info}`;
