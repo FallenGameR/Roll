@@ -114,7 +114,10 @@ def scan_markdown():
     """Разбирает разделы музыки: файл -> сцена -> список строк."""
     files = {}
     for md in sorted(ROOT.rglob("*.md")):
-        if "_Locations_backup" in str(md):
+        # Папки с точкой (.github, .obsidian, .git) - не страницы кампании:
+        # в скиллах лежат примеры разделов музыки, и их нельзя переписывать.
+        rel = md.relative_to(ROOT).parts
+        if "_Locations_backup" in rel or any(p.startswith(".") for p in rel[:-1]):
             continue
         lines = md.read_text(encoding="utf-8").splitlines()
         in_music = level = 0
@@ -256,6 +259,36 @@ def repath_track_everywhere(files, old_path, new_path, apply):
         if apply:
             data["lines"] = lines
             write_lines(md, lines)
+    if apply:
+        count += repath_playlists(old_path, new_path)
+    return count
+
+
+def repath_playlists(old_path, new_path):
+    """Тот же переезд в .m3u8: каталог плеера и выгрузка в `_playlists`.
+
+    Без этого следующий прогон не находит новый путь в каталоге плеера и
+    считает трек удалённым Мастером - и сносит его со страницы. Файлы
+    правятся байт в байт: BOM и окончания строк остаются, какими были.
+    Обход через listdir, а не glob: glob пропускает имена с точкой, а
+    сцены кампании называются именно так.
+    """
+    count = 0
+    for folder in (CATALOG, PLAYLISTS):
+        if not folder.exists():
+            continue
+        for name in os.listdir(folder):
+            if not name.lower().endswith(".m3u8"):
+                continue
+            m3u = folder / name
+            raw = m3u.read_bytes()
+            bom = raw.startswith(b"\xef\xbb\xbf")
+            text = raw[3:].decode("utf-8") if bom else raw.decode("utf-8")
+            hits = text.count(old_path)
+            if not hits:
+                continue
+            m3u.write_bytes((b"\xef\xbb\xbf" if bom else b"") + text.replace(old_path, new_path).encode("utf-8"))
+            count += hits
     return count
 
 

@@ -595,7 +595,10 @@ PAGE = r"""<!doctype html>
              white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
  #scenebtn:hover { background:#2e3240; }
  #scenebtn small { color:#8b8f9c; margin-right:6px; }
- #scenes { position:fixed; right:18px; bottom:62px; z-index:21; width:min(560px, calc(100vw - 36px));
+ /* Попап сцен живёт в колонке плейлиста и стоит над кнопкой плейлиста
+    ровно по её ширине: края берутся от колонки, без расчётов в JS. */
+ aside { z-index:6; }
+ #scenes { position:absolute; left:16px; right:0; bottom:48px; z-index:21;
            max-height:calc(100vh / var(--z, 1) - 90px); display:none; flex-direction:column;
            background:#1d1f26; border:1px solid #333744; border-radius:10px;
            box-shadow:0 10px 30px rgba(0,0,0,.6); }
@@ -609,15 +612,13 @@ PAGE = r"""<!doctype html>
  /* Локация, где играет текущая сцена, подсвечена так же, как группа тегов
     с отмеченным тегом. Рамка есть у всех групп, но прозрачная, чтобы
     список не сдвигался. */
- .place:has(.scene.now) { border-color:#43708f; background:#1a2530; }
- .place:has(.scene.now) h3 { color:#b9d3e6; }
- .place .sub { display:inline-flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 6px;
-               margin:0 6px 6px 0; border:1px dashed #3a3f4d; border-radius:8px; }
- .place .sub > b { font-size:11px; font-weight:400; text-transform:uppercase; letter-spacing:.08em;
-                   color:#8b8f9c; margin:0 2px 0 4px; }
- .place .sub .scene { margin:0; }
- .place .sub:has(.scene.now) { border:1px solid #43708f; background:#1d2a36; }
- .place .sub:has(.scene.now) > b { color:#b9d3e6; }
+ .place:has(.scene.now, select.npc.now) { border-color:#43708f; background:#1a2530; }
+ .place:has(.scene.now, select.npc.now) h3 { color:#b9d3e6; }
+ select.npc { margin:0 6px 6px 0; padding:5px 8px; font:inherit; font-size:14px; color:#dcdde1;
+              border:1px solid #333744; border-radius:6px; background:#1b1d24; cursor:pointer; }
+ select.npc:hover { border-color:#5aa7d8; }
+ select.npc.now { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
+ select.npc option { background:#1d1f26; color:#dcdde1; }
  .scene { display:inline-block; margin:0 6px 6px 0; padding:5px 10px; font-size:14px;
           border:1px solid #333744; border-radius:6px; background:#1b1d24; cursor:pointer; }
  .scene:hover, .scene.hot { border-color:#5aa7d8; }
@@ -655,11 +656,11 @@ PAGE = r"""<!doctype html>
       <button class="mode" data-mode="shuffle" title="случайный порядок"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h2.5c3 0 4 7 7 7H14M2 11.5h2.5c1.2 0 2-1 2.6-2.3M9 6.8c.6-1.3 1.4-2.3 2.6-2.3H14M12 2.5l2 2-2 2M12 9.5l2 2-2 2"/></svg></button>
       <button class="mode" data-mode="repeat"  title="повтор списка по кругу"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V6a2 2 0 0 1 2-2h8M11 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3M5 14l-2-2 2-2"/></svg></button>
     </div>
+    <div id="scenes">
+      <input id="scenefind" placeholder="Локация или сцена… Enter - включить, Esc - закрыть" autocomplete="off">
+      <div id="scenelist"></div>
+    </div>
   </aside>
-</div>
-<div id="scenes">
-  <input id="scenefind" placeholder="Локация или сцена… Enter - включить, Esc - закрыть" autocomplete="off">
-  <div id="scenelist"></div>
 </div>
 <script>
 // Во вкладке приложения (пульт открывает её с #app) страница наследует зум
@@ -987,7 +988,7 @@ async function pollScenes(){
     scenes = d.scenes || []; sceneNow = d.current || "";
     document.getElementById("scenename").textContent =
       sceneNow ? sceneNow.slice(1) : (scenes.length ? "свой список" : "нет плейлистов");
-    if (sceneBox.classList.contains("open")) drawScenes();
+    if (sceneBox.classList.contains("open") && !document.activeElement.matches("select.npc")) drawScenes();
   } catch(e){ }
 }
 
@@ -1011,13 +1012,21 @@ function drawScenes(){
     const npc = list.filter(s => s.scene.startsWith("НПС - "));
     html += `<div class="place"><h3>${esc(place)}</h3>`;
     for (const s of list) if (!npc.includes(s)) html += chip(s, s.scene || place);
-    if (npc.length)
-      html += `<span class="sub"><b>НПС</b>` + npc.map(s => chip(s, s.scene.slice(6))).join("") + `</span>`;
+    if (npc.length){
+      // Тема НПС играет одна, поэтому все НПС локации - один выпадающий
+      // список размером с кнопку сцены; выбор сразу включает тему.
+      const cur = npc.find(s => s.title === sceneNow);
+      html += `<select class="npc${cur ? " now" : ""}" title="Тема НПС">` +
+        `<option value="" ${cur ? "" : "selected"} disabled>НПС</option>` +
+        npc.map(s => `<option value="${esc(s.title)}" ${s === cur ? "selected" : ""}>${esc(s.scene.slice(6))}</option>`).join("") +
+        `</select>`;
+    }
     html += `</div>`;
   }
   const list = document.getElementById("scenelist");
   list.innerHTML = html || '<div class="idle" style="padding:10px 0">ничего не нашлось</div>';
   list.querySelectorAll(".scene").forEach(el => el.onclick = () => pickScene(el.dataset.t));
+  list.querySelectorAll("select.npc").forEach(el => el.onchange = () => el.value && pickScene(el.value));
 }
 
 async function pickScene(title){

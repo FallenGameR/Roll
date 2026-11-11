@@ -78,7 +78,9 @@ def main():
     changed_files = stars = moved = 0
 
     for md in sorted(ROOT.rglob("*.md")):
-        if "_Locations_backup" in str(md):
+        # Папки с точкой (.github, .obsidian, .git) - не страницы кампании.
+        rel = md.relative_to(ROOT).parts
+        if "_Locations_backup" in rel or any(p.startswith(".") for p in rel[:-1]):
             continue
         lines = md.read_text(encoding="utf-8").splitlines()
         in_music = level = 0
