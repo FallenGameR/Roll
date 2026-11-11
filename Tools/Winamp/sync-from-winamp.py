@@ -14,6 +14,8 @@
   Music\\Rejected.csv, чтобы при подборе трек не вернули туда же;
 * плейлист удалён целиком -> убирается вся сцена (для ситуации или
   эффекта это одна строка), её треки тоже идут в журнал;
+* то же для тем NPC: их списки `<локация> - НПС - <имя>` собираются из
+  `music:` в шапке карточки, и удалённое в плеере уходит оттуда;
 * тег Meta:Delete -> послушали, не понравилось: mp3 уезжает в
   Music\\Deleted, ссылки на него исчезают из файлов кампании;
 * тег Meta:Excluded -> отложен на потом: то же самое, но в
@@ -581,6 +583,31 @@ def log_rejected(rows):
             out.writerow([today, playlist, path])
 
 
+def npc_playlists(md, lines, pages):
+    """Названия списков плеера для темы NPC - так же, как их собирает
+    Export-Playlist: `<локация> - НПС - <имя до запятой>` на каждую
+    страницу из `location` карточки. Отыгранные локации (Done) в плеер не
+    едут, их списки не в счёт."""
+    titles = []
+    if not lines or lines[0].strip() != "---":
+        return titles
+    in_key = False
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if re.match(r"^\S[^:]*:", line):
+            in_key = line.startswith("location:")
+        if not in_key:
+            continue
+        for target in re.findall(r"\[\[([^\]|#]+)", line):
+            page = pages.get(target.strip())
+            if page is None or "Done" in page.parts:
+                continue
+            name = md.stem.split(",")[0].strip()
+            titles.append(f"{playlist_base_name(page)} - НПС - {name}")
+    return titles
+
+
 def main():
     apply = "--apply" in sys.argv
     catalog = read_catalog()
@@ -590,6 +617,10 @@ def main():
         return
 
     exported_names, exported_paths, exported_where = read_exported()
+    pages = {}
+    for page in ROOT.rglob("*.md"):
+        if not any(p.startswith(".") for p in page.relative_to(ROOT).parts[:-1]):
+            pages.setdefault(page.stem, page)
 
     # Все пути, которые плеер сейчас знает.
     alive = set()
@@ -621,8 +652,28 @@ def main():
                 local_single.update(t.lower() for t in tracks)
         for scene, items in data["scenes"].items():
             if scene == NPC_SCENE:
-                # Список NPC собирается из карточки, а не из раздела
-                # локации, и строк на странице за ним не стоит.
+                # Тема NPC живёт в шапке карточки, и её список собирается
+                # по `location`. Удалённое из списка в плеере уходит из
+                # `music:` так же, как из сцены; удалённый целиком список -
+                # вся тема. Если локаций несколько, трек остаётся, пока он
+                # жив хоть в одном из её списков.
+                titles = (npc_playlists(md, data["lines"], pages)
+                          if "NPC" in md.parts else [])
+                live = [t for t in titles if t in catalog]
+                if live:
+                    known = {p.lower() for t in live for p in catalog[t]}
+                    for index, path in items:
+                        if path.lower() not in known:
+                            drop.add(index)
+                            rejected.extend((t, path) for t in live)
+                    continue
+                gone = [t for t in titles if t in exported_names]
+                if gone:
+                    for index, path in items:
+                        drop.add(index)
+                        rejected.extend((t, path) for t in gone)
+                elif titles:
+                    skipped.extend(titles)
                 continue
             title = playlist_title(md, scene)
             if title is None:
