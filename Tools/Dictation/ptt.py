@@ -221,14 +221,37 @@ def quiet_wav(name, volume):
         return path
 
 
-CHIMES = {} if args.chime_volume <= 0 else {
-    name: quiet_wav(name, min(args.chime_volume, 1.0)) for name in ("Speech On.wav", "Speech Off.wav")}
+# Ползунок в пульте пишет громкость в этот файл; он важнее --chime-volume и
+# перечитывается перед каждым звуком, поэтому перезапуск диктовки не нужен.
+CHIME_VOLUME_PATH = os.path.join(os.path.dirname(args.log), "chime-volume.txt")
+CHIMES = {}
+chime_volume = {"value": None, "mtime": None}
+
+
+def current_chime_volume():
+    try:
+        mtime = os.path.getmtime(CHIME_VOLUME_PATH)
+    except OSError:
+        return args.chime_volume
+    if mtime != chime_volume["mtime"]:
+        try:
+            with open(CHIME_VOLUME_PATH, encoding="utf-8") as f:
+                chime_volume["value"] = float(f.read().strip())
+        except (OSError, ValueError):
+            chime_volume["value"] = args.chime_volume
+        chime_volume["mtime"] = mtime
+    return chime_volume["value"]
 
 
 def chime(name):
     # Windows Speech Recognition sounds; async so recording isn't delayed.
-    if name in CHIMES:
-        winsound.PlaySound(CHIMES[name], winsound.SND_FILENAME | winsound.SND_ASYNC)
+    volume = max(0.0, min(current_chime_volume(), 1.0))
+    if volume <= 0:
+        return
+    if CHIMES.get(name, (None,))[0] != volume:
+        CHIMES[name] = (volume, quiet_wav(name, volume))
+        log.info("Chime %s at volume %.2f", name, volume)
+    winsound.PlaySound(CHIMES[name][1], winsound.SND_FILENAME | winsound.SND_ASYNC)
 
 
 def recorder():

@@ -86,6 +86,17 @@
     color: inherit;
   }
   input:focus { outline: 2px solid var(--color-focus-outline, #0969da); outline-offset: -1px; }
+  /* Ползунок громкости звуков записи - в правом верхнем углу блока диктовки. */
+  .chime { margin-left: auto; display: flex; align-items: center; opacity: .8; cursor: pointer; }
+  .chime:hover { opacity: 1; }
+  /* Тонкая линия с маленькой точкой вместо системного ползунка. */
+  .chime input { flex: none; width: 72px; height: 12px; margin: 0; padding: 0; border: none;
+                 background: transparent; appearance: none; -webkit-appearance: none; cursor: pointer; }
+  .chime input:focus { outline: none; }
+  .chime input::-webkit-slider-runnable-track { height: 2px; border-radius: 1px;
+                 background: color-mix(in srgb, var(--true-color-blue, #0969da) 35%, transparent); }
+  .chime input::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 8px; margin-top: -3px;
+                 border-radius: 50%; background: var(--true-color-blue, #0969da); border: none; }
   pre {
     font-family: var(--font-mono, Consolas, monospace);
     font-size: 13px;
@@ -122,7 +133,8 @@
   <pre id="r-out"></pre>
 </section>
 <section class="fill">
-  <h2><span class="dot" id="d-dot"></span>Диктовка <span class="state" id="d-state">...</span></h2>
+  <h2><span class="dot" id="d-dot"></span>Диктовка <span class="state" id="d-state">...</span>
+    <label class="chime" title="Громкость звуков начала и конца записи"><input type="range" id="d-chime" min="0" max="1" step="0.01"></label></h2>
   <div class="row nowrap">
     <button id="d-start">Запустить</button>
     <button id="d-stop">Остановить</button>
@@ -295,6 +307,41 @@
     try { await post("/api/dictation/clear"); lastPhrase = null; loadLog(); }
     catch (e) { $("error").textContent = e.message; }
   };
+  // Громкость звуков записи. Ползунок квадратичный: слух различает тихие
+  // уровни тоньше громких, и привычные 0.1 оказываются около трети шкалы.
+  // На отпускании страница проигрывает Speech On с этой громкостью.
+  const chimeSlider = $("d-chime");
+  const chimeTitle = (v) => `Громкость звуков начала и конца записи: ${Math.round(v * 100)}% от системной`;
+  let chimeSample = null;
+  async function playChime(volume) {
+    try {
+      if (!chimeSample) {
+        const { wav } = await post("/api/dictation/chime/sample");
+        chimeSample = Uint8Array.from(atob(wav), (c) => c.charCodeAt(0)).buffer;
+      }
+      const ctx = new AudioContext();
+      const src = ctx.createBufferSource();
+      src.buffer = await ctx.decodeAudioData(chimeSample.slice(0));
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      src.connect(gain).connect(ctx.destination);
+      src.onended = () => ctx.close();
+      src.start();
+    } catch { /* проба - не главное */ }
+  }
+  post("/api/dictation/chime").then(({ volume }) => {
+    chimeSlider.value = Math.sqrt(volume);
+    chimeSlider.parentElement.title = chimeTitle(volume);
+  }).catch(() => {});
+  chimeSlider.oninput = () => (chimeSlider.parentElement.title = chimeTitle(chimeSlider.value ** 2));
+  chimeSlider.onchange = async () => {
+    try {
+      const { volume } = await post("/api/dictation/chime/set", { volume: chimeSlider.value ** 2 });
+      chimeSlider.parentElement.title = chimeTitle(volume);
+      playChime(volume);
+    } catch (e) { $("error").textContent = e.message; }
+  };
+
   $("w-start").onclick = () => call("/api/winamp/start", "w-state");
   $("w-stop").onclick = () => call("/api/winamp/stop", "w-state");
   $("w-browser").onclick = () => post("/api/winamp/open").catch((e) => ($("error").textContent = e.message));

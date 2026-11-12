@@ -3,7 +3,7 @@
 // Каждый обработчик получает ({ session, body }).
 import { connect } from "node:net";
 import { execFile, spawn } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,6 +90,33 @@ export async function phrases(limit = 300) {
 export async function dictationState() {
     try { return { ...JSON.parse(await readFile(DICTATION_STATE, "utf8")), now: Date.now() / 1000 }; }
     catch { return { stage: "", now: Date.now() / 1000 }; }
+}
+
+// Громкость звуков начала и конца записи, доля от системных Speech On/Off.
+// ptt.py перечитывает файл перед каждым звуком; без файла действует его
+// --chime-volume, то же значение по умолчанию.
+const CHIME_VOLUME = join(DICTATION_DIR, "chime-volume.txt");
+const CHIME_DEFAULT = 0.1;
+const SPEECH_ON = join(process.env.SystemRoot ?? "C:\\Windows", "Media", "Speech On.wav");
+
+export async function chimeVolume() {
+    try {
+        const v = parseFloat(await readFile(CHIME_VOLUME, "utf8"));
+        return { volume: Number.isFinite(v) ? v : CHIME_DEFAULT };
+    } catch { return { volume: CHIME_DEFAULT }; }
+}
+
+export async function setChimeVolume(value) {
+    const v = Math.round(Math.min(1, Math.max(0, +value || 0)) * 1000) / 1000;
+    await mkdir(DICTATION_DIR, { recursive: true });
+    await writeFile(CHIME_VOLUME, String(v), "utf8");
+    return { volume: v };
+}
+
+// Системный Speech On.wav для пробы громкости на странице: она сама
+// умножает его на громкость ползунка, так же как ptt.py.
+export async function chimeSample() {
+    return { wav: (await readFile(SPEECH_ON)).toString("base64") };
 }
 
 export async function clearPhrases() {
@@ -214,6 +241,9 @@ export const routes = {
     "/api/dictation/log": () => phrases(),
     "/api/dictation/state": () => dictationState(),
     "/api/dictation/clear": () => clearPhrases(),
+    "/api/dictation/chime": () => chimeVolume(),
+    "/api/dictation/chime/set": ({ body }) => setChimeVolume(body.volume),
+    "/api/dictation/chime/sample": () => chimeSample(),
     "/api/winamp/start": () => startWinamp(),
     "/api/winamp/stop": () => stopWinamp(),
     "/api/winamp/open": () => openWinampBrowser(),
