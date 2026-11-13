@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Правка текста</title>
+<style>
+  /* Вид корректорской правки на полях, а не диффа: вычеркнутое тонкой
+     серой чертой, вписанное тёплыми чернилами, рамки и статусы пастельные. */
+  :root { --status-bar-color: var(--background-color-default, #ffffff);
+          --ink: #9a4a2c; --ink-wash: rgba(196,120,80,.10); --struck: #9b958c;
+          --frame: #e3d9cc; --frame-main: #d9b9a0; --frame-chosen: #a9c4a4;
+          --wait: #8a7a9e; --ok: #6f8f68; --bad: #b07a6e; }
+  :root[data-color-mode="dark"], :root[data-theme-tone="dark"] {
+          --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --struck: #7d786f;
+          --frame: #3b3631; --frame-main: #6b4f3e; --frame-chosen: #4f6a4b;
+          --wait: #b3a6c6; --ok: #9fbd97; --bad: #d4a397; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-color-mode]):not([data-theme-tone]) {
+          --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --struck: #7d786f;
+          --frame: #3b3631; --frame-main: #6b4f3e; --frame-chosen: #4f6a4b;
+          --wait: #b3a6c6; --ok: #9fbd97; --bad: #d4a397; }
+  }
+  html, body { height: 100%; }
+  body { margin: 0; padding: 16px 20px; box-sizing: border-box;
+         background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
+         font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 15px; line-height: 22px; }
+  .top { display: flex; align-items: baseline; gap: 12px; }
+  h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; flex: 1; min-width: 0;
+       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .path { color: var(--text-color-muted, #666); font-size: 12px; margin: 2px 0 12px; word-break: break-all; }
+  .state { font-size: 13px; padding: 2px 10px; border-radius: 10px; white-space: nowrap;
+           border: 1px solid var(--frame); color: var(--text-color-muted, #666); }
+  .state.ждёт { color: var(--wait); }
+  .state.принята { color: var(--ok); }
+  .state.устарела, .state.отклонена { color: var(--bad); }
+  .comment { margin: 0 0 12px; color: var(--ink); font-style: italic; }
+  .reason { margin: 0 0 12px; color: var(--bad); }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+           color: var(--text-color-muted, #666); margin: 14px 0 4px; display: flex; gap: 10px; align-items: center; }
+  .label .note { text-transform: none; letter-spacing: 0; font-style: italic; }
+  .text { white-space: pre-wrap; padding: 10px 12px; border-radius: 8px;
+          border: 1px solid var(--frame); line-height: 26px; }
+  .orig { opacity: .75; }
+  .variant.main .text { border-color: var(--frame-main); }
+  .variant.chosen .text { border-color: var(--frame-chosen); border-width: 2px; }
+  del { color: var(--struck); text-decoration: line-through; text-decoration-thickness: 1px;
+        text-decoration-color: var(--struck); background: none; }
+  ins { color: var(--ink); background: var(--ink-wash); border-radius: 3px; text-decoration: none; }
+  button { font: inherit; font-size: 14px; padding: 5px 14px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--frame); background: transparent; color: inherit; }
+  button:hover:not(:disabled) { border-color: var(--frame-main); color: var(--ink); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.accept { margin-left: auto; }
+  .bottom { display: flex; gap: 8px; margin-top: 16px; }
+  .bottom .reject { margin-left: auto; }
+  .idle { color: var(--text-color-muted, #666); margin-top: 20px; }
+</style></head>
+<body>
+<div id="root"><div class="idle">Загружаю…</div></div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Токены: слова, пробелы и переводы строк, отдельные знаки. Пробелы
+// остаются токенами, чтобы абзацы раздела не слиплись на странице.
+const tokens = (s) => s.match(/\s+|[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) ?? [];
+
+function diff(a, b){
+  const x = tokens(a), y = tokens(b), n = x.length, m = y.length;
+  const L = Array.from({length: n + 1}, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      L[i][j] = x[i] === y[j] ? L[i+1][j+1] + 1 : Math.max(L[i+1][j], L[i][j+1]);
+  let out = "", i = 0, j = 0, del = "", ins = "";
+  const flush = () => { if (del) out += `<del>${esc(del)}</del>`; if (ins) out += `<ins>${esc(ins)}</ins>`; del = ins = ""; };
+  while (i < n || j < m){
+    if (i < n && j < m && x[i] === y[j]){ flush(); out += esc(x[i]); i++; j++; }
+    else if (j < m && (i === n || L[i][j+1] >= L[i+1][j])) ins += y[j++];
+    else del += x[i++];
+  }
+  flush();
+  return out;
+}
+
+let shown = "";
+async function poll(){
+  try {
+    const s = await (await fetch("/state", {method: "POST"})).json();
+    const stamp = JSON.stringify([s.id, s.state, s.variant]);
+    if (stamp !== shown){ shown = stamp; render(s); }
+  } catch(e){ }
+}
+
+function render(s){
+  const root = document.getElementById("root");
+  const check = `<button id="check" title="Попросить сессию найти свежий абзац и предложить правку">Проверь, что я пишу</button>`;
+  if (!s.id){
+    root.innerHTML = `<div class="top"><h1>Правок пока нет</h1>${check}</div>
+      <div class="idle">Сессия покажет здесь правку, когда найдёт, что поправить.</div>`;
+    wire(s); return;
+  }
+  const open = s.state === "ждёт";
+  let html = `<div class="top"><h1 title="${esc(s.document)}">${esc(s.document)}</h1>
+      <span class="state ${esc(s.state)}">${esc(s.state)}${s.variant ? " · вариант " + s.variant : ""}</span></div>
+    <div class="path">${esc(s.path)}</div>`;
+  if (s.comment) html += `<p class="comment">${esc(s.comment)}</p>`;
+  if (s.reason && s.state === "устарела") html += `<p class="reason">${esc(s.reason)}</p>`;
+  html += `<div class="label">Сейчас в файле</div><div class="text orig">${esc(s.original)}</div>`;
+  s.variants.forEach((v, k) => {
+    const cls = "variant" + (k === 0 ? " main" : "") + (s.variant === k + 1 ? " chosen" : "");
+    html += `<div class="${cls}"><div class="label">${k === 0 ? "Основной вариант" : "Вариант " + (k + 1)}` +
+      (v.note ? ` <span class="note">${esc(v.note)}</span>` : "") +
+      `<button class="accept" data-k="${k}" ${open ? "" : "disabled"}>Принять</button></div>` +
+      `<div class="text">${diff(s.original, v.text)}</div></div>`;
+  });
+  html += `<div class="bottom">${check}<button class="reject" ${open ? "" : "disabled"}>Не принимать</button></div>`;
+  root.innerHTML = html;
+  wire(s);
+}
+
+async function decide(s, accept){
+  document.querySelectorAll("button.accept, button.reject").forEach((b) => b.disabled = true);
+  await fetch("/decide", {method: "POST", body: JSON.stringify({id: s.id, accept})});
+  shown = ""; poll();
+}
+
+function wire(s){
+  document.querySelectorAll("button.accept").forEach((b) => b.onclick = () => decide(s, Number(b.dataset.k)));
+  const r = document.querySelector("button.reject");
+  if (r) r.onclick = () => decide(s, null);
+  document.getElementById("check").onclick = async (e) => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = "Попросила…";
+    await fetch("/check", {method: "POST"});
+    setTimeout(() => { b.disabled = false; b.textContent = "Проверь, что я пишу"; }, 3000);
+  };
+}
+
+setInterval(poll, 1000); poll();
+</script>
+</body></html>

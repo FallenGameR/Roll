@@ -32,7 +32,8 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
   JS, которые запускают руками или из скилла. Модуль их не импортирует.
 
 Темы сейчас такие: `Music`, `Playlists`, `Winamp`, `Audio`, `Dictation`,
-`Dice`, `Images`, `Maps`, `Players`, `Vault`, `Panel`, `Remarkable`. Новую тему
+`Dice`, `Images`, `Maps`, `Players`, `Vault`, `Panel`, `Editor`, `Remarkable`.
+Новую тему
 заводят, только если код не ложится ни в одну из них; одна и та же тема
 в `Public`, `Private` и `Tools` называется одинаково.
 

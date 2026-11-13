@@ -1,17 +1,18 @@
 <#
 .SYNOPSIS
-    Подключает пульт Roll к Copilot: canvas с кнопками диктовки, плейлиста
-    Winamp и бросков кубиков.
+    Подключает к Copilot canvas модуля Roll: пульт (диктовка, плейлист
+    Winamp, кубики) и «Правку текста».
 
 .DESCRIPTION
-    Код пульта живёт в модуле, в Tools\Panel. Copilot ищет расширения в
-    ~/.copilot/extensions, поэтому команда кладёт туда заглушку
-    roll-panel\extension.mjs, которая импортирует настоящий файл из модуля.
+    Код canvas живёт в модуле, в Tools\Panel и Tools\Editor. Copilot ищет
+    расширения в ~/.copilot/extensions, поэтому команда кладёт туда
+    заглушки roll-panel\extension.mjs и roll-editor\extension.mjs, которые
+    импортируют настоящие файлы из модуля.
     Путь к модулю в заглушке свой на каждом компьютере, поэтому после
     переноса модуля команду надо запустить заново.
 
-    Пульт появится в сессиях, начатых после установки. Как править его на
-    лету - Tools\Panel\README.md.
+    Canvas появятся в сессиях, начатых после установки. Как править их на
+    лету - README.md в Tools\Panel и Tools\Editor.
 
 .EXAMPLE
     Install-RollPanel
@@ -21,25 +22,32 @@ function Install-RollPanel {
     param()
 
     $ErrorActionPreference = 'Stop'
-    $source = Join-Path $script:RollRoot 'Tools\Panel\extension.mjs'
-    if (-not (Test-Path -LiteralPath $source)) { throw "Не найден $source" }
-
     $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
-    $target = Join-Path $copilotHome 'extensions\roll-panel'
-    if (Test-Path -LiteralPath $target) {
-        Get-ChildItem -LiteralPath $target -Force | Remove-Item -Recurse -Force
-    } else {
-        New-Item -ItemType Directory -Force $target | Out-Null
-    }
 
-    $url = ([uri] (Resolve-Path -LiteralPath $source).Path).AbsoluteUri
-    $stub = @"
-// Заглушка: настоящий пульт лежит в модуле Roll. Создана Install-RollPanel.
+    $canvases = [ordered] @{
+        'roll-panel'  = 'Tools\Panel\extension.mjs'
+        'roll-editor' = 'Tools\Editor\extension.mjs'
+    }
+    foreach ($name in $canvases.Keys) {
+        $source = Join-Path $script:RollRoot $canvases[$name]
+        if (-not (Test-Path -LiteralPath $source)) { throw "Не найден $source" }
+
+        $target = Join-Path $copilotHome "extensions\$name"
+        if (Test-Path -LiteralPath $target) {
+            Get-ChildItem -LiteralPath $target -Force | Remove-Item -Recurse -Force
+        } else {
+            New-Item -ItemType Directory -Force $target | Out-Null
+        }
+
+        $url = ([uri] (Resolve-Path -LiteralPath $source).Path).AbsoluteUri
+        $stub = @"
+// Заглушка: настоящий canvas лежит в модуле Roll. Создана Install-RollPanel.
 await import("$url");
 "@
-    [System.IO.File]::WriteAllText((Join-Path $target 'extension.mjs'), $stub,
-        [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText((Join-Path $target 'extension.mjs'), $stub,
+            [System.Text.UTF8Encoding]::new($false))
+        Write-Host "Подключён: $target -> $source"
+    }
 
-    Write-Host "Пульт подключён: $target -> $source"
-    Write-Host 'Он появится в сессиях, начатых после этого.'
+    Write-Host 'Canvas появятся в сессиях, начатых после этого.'
 }

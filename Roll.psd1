@@ -6,7 +6,8 @@
     Author             = 'FallenGameR'
     Description        = 'Tabletop RPG vault toolkit: music library and ' +
                           'Winamp playlists, voice dictation, dice rolls, ' +
-                          'PNG prompts and icons, Copilot control panel, ' +
+                          'PNG prompts and icons, Copilot control panel and ' +
+                          'text-edit canvas, ' +
                           'file transfer to reMarkable via RCU. ' +
                           'Standalone scripts for maps, players, audio and ' +
                           'vault checks live in Tools.'
