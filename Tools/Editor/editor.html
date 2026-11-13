@@ -40,7 +40,6 @@
   .label .note { text-transform: none; letter-spacing: 0; font-style: italic; }
   .text { white-space: pre-wrap; padding: 10px 12px; border-radius: 8px;
           border: 1px solid var(--frame); line-height: 26px; }
-  .orig { opacity: .75; }
   .variant.main .text { border-color: var(--frame-main); }
   .variant.chosen .text { border-color: var(--frame-chosen); border-width: 2px; }
   del { color: var(--struck); text-decoration: line-through; text-decoration-thickness: 1px;
@@ -51,7 +50,7 @@
   button:hover:not(:disabled) { border-color: var(--frame-main); color: var(--ink); }
   button:disabled { opacity: .45; cursor: default; }
   button.accept { margin-left: auto; }
-  .bottom { display: flex; gap: 8px; margin-top: 16px; }
+  .bottom { display: flex; gap: 8px; margin-top: 16px; padding-bottom: 12px; }
   .bottom .reject { margin-left: auto; }
   .idle { color: var(--text-color-muted, #666); margin-top: 20px; }
 </style></head>
@@ -106,7 +105,6 @@ function render(s){
     `<div class="meta"><span class="state ${esc(s.state)}">${esc(s.state)}</span>${check}</div>`;
   if (s.comment) html += `<p class="comment">${esc(s.comment)}</p>`;
   if (s.reason && s.state === "устарела") html += `<p class="reason">${esc(s.reason)}</p>`;
-  html += `<div class="label">Сейчас в файле</div><div class="text orig">${esc(s.original)}</div>`;
   s.variants.forEach((v, k) => {
     const cls = "variant" + (k === 0 ? " main" : "") + (s.variant === k + 1 ? " chosen" : "");
     html += `<div class="${cls}"><div class="label">${k === 0 ? "Основной вариант" : "Вариант " + (k + 1)}` +
