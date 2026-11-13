@@ -200,8 +200,10 @@
 
   function render(s) {
     dictationOn = s.dictation;
+    // Работает ли диктовка, видно по цвету точки; в строке только подсказка.
     $("d-dot").classList.toggle("on", s.dictation);
-    $("d-state").textContent = s.dictation ? "работает, держите Copilot, Menu или правую Win" : "остановлена";
+    $("d-dot").title = s.dictation ? "работает" : "остановлена";
+    $("d-state").textContent = s.dictation ? "жми Copilot, Menu или правую Win" : "";
     $("d-start").disabled = busy || s.dictation;
     $("d-stop").disabled = busy || !s.dictation;
     if (s.lastPhrase !== lastPhrase) { lastPhrase = s.lastPhrase; loadLog(); }

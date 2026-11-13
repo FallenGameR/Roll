@@ -139,6 +139,15 @@ export const routes = {
         return { ...view(state), id: state?.id };
     },
     "/decide": async ({ session, body }) => decide(session, body),
+    "/clear": async ({ session, body }) => {
+        const state = await load(session);
+        if (!state || body.id !== state.id) return view(state);   // страница смотрела на старую правку
+        await save(session, null);
+        if (state.status === "ждёт") {
+            tell(session, `[Правка текста] Мастер очистил панель, не решив правку в «${state.document}».`);
+        }
+        return view(null);
+    },
     "/check": async ({ session }) => {
         tell(session, "[Правка текста] Мастер просит посмотреть, что он сейчас пишет: найди свежий абзац и предложи правку.");
         return { ok: true };
