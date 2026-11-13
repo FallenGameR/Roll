@@ -185,13 +185,16 @@
         const total = (l.record || 0) + (l.prepare || 0) + (l.decode || 0) + (l.type || 0);
         const n = l.chars, tail = n % 10, teen = n % 100 >= 11 && n % 100 <= 14;
         const chars = `${n} ${teen || tail === 0 || tail >= 5 ? "знаков" : tail === 1 ? "знак" : "знака"}`;
-        // Подготовка и печать почти всегда мгновенные; показываем, только
-        // если заметны, чтобы строка помещалась в одну.
-        const typing = l.type >= 0.1 ? ` · печать ${f1(l.type)}с` : "";
-        const prepare = l.prepare >= 0.1 ? ` · подготовка ${f1(l.prepare)}с` : "";
+        // Слова полные, а влезает строка за счёт лишнего: «всего» -
+        // простая сумма, она в подсказке; подготовка и печать обычно
+        // десятые доли секунды и появляются, только когда тормозят.
+        const typing = l.type >= 0.3 ? ` · печать ${f1(l.type)}с` : "";
+        const prepare = l.prepare >= 0.3 ? ` · подготовка ${f1(l.prepare)}с` : "";
         lastBox.textContent = `запись ${f1(l.record)}с${prepare} · ` +
-          `распознавание ${f1(l.decode)}с${typing} · всего ${Math.round(total)}с · ${chars}`;
-        lastBox.title = `${lastBox.textContent}\nпоследняя фраза; речи после отсечения тишины ${sec(l.speech ?? 0)}`;
+          `распознавание ${f1(l.decode)}с${typing} · ${chars}`;
+        lastBox.title = `запись ${f1(l.record)}с · подготовка ${f1(l.prepare ?? 0)}с · ` +
+          `распознавание ${f1(l.decode)}с · печать ${f1(l.type ?? 0)}с · всего ${f1(total)}с · ${chars}` +
+          `\nпоследняя фраза; речи после отсечения тишины ${sec(l.speech ?? 0)}`;
         lastBox.hidden = false;
       } else lastBox.hidden = true;
     } catch { /* следующий опрос */ }
@@ -206,6 +209,7 @@
     $("d-state").textContent = s.dictation ? "жми Copilot, Menu или правую Win" : "";
     $("d-start").disabled = busy || s.dictation;
     $("d-stop").disabled = busy || !s.dictation;
+    $("d-clear").disabled = busy;
     if (s.lastPhrase !== lastPhrase) { lastPhrase = s.lastPhrase; loadLog(); }
 
     winampUrl = s.winampUrl;
