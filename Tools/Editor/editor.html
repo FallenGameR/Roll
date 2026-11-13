@@ -27,7 +27,11 @@
   .path { color: var(--text-color-muted, #666); font-size: 12px; margin: 4px 0 0; word-break: break-all; }
   .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
           margin: 12px 0 16px; }
-  .meta button { font-size: 12px; padding: 3px 10px; }
+  .meta button, button.accept { font-size: 12px; line-height: 18px; padding: 3px 10px; }
+  .after { display: flex; justify-content: flex-end; margin: 6px 0 0; }
+  /* Нижнее поле body в прокрутку не попадает (высота 100%), поэтому
+     отступ под последней кнопкой держит сам контейнер. */
+  #root { padding-bottom: 10px; }
   .meta #check { margin-left: auto; }
   .comment { margin: 0 0 12px; color: var(--ink); font-style: italic; }
   .reason { margin: 0 0 12px; color: var(--bad); }
@@ -115,7 +119,8 @@ function render(s){
     html += `<div class="${cls}"><div class="label">${k === 0 ? "Основной вариант" : "Вариант " + (k + 1)}` +
       (v.note ? ` <span class="note">${esc(v.note)}</span>` : "") +
       `<button class="accept" data-k="${k}" ${open ? "" : "disabled"}>Принять</button></div>` +
-      `<div class="text">${diff(s.original, v.text)}</div></div>`;
+      `<div class="text">${diff(s.original, v.text)}</div>` +
+      `<div class="after"><button class="accept" data-k="${k}" ${open ? "" : "disabled"}>Принять</button></div></div>`;
   });
   root.innerHTML = html;
   wire(s);
