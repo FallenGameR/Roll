@@ -21,18 +21,13 @@
   body { margin: 0; padding: 16px 20px; box-sizing: border-box;
          background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
          font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 15px; line-height: 22px; }
-  /* Шапка в три строки: имя документа во всю ширину с переносом, путь,
-     затем статус слева и кнопка проверки справа. */
+  /* Шапка: имя документа во всю ширину с переносом, папка, затем строка
+     кнопок справа. Статуса нет: после решения он ничего не даёт. */
   h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; overflow-wrap: anywhere; }
   .path { color: var(--text-color-muted, #666); font-size: 12px; margin: 4px 0 0; word-break: break-all; }
-  .meta { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  .meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px;
           margin: 12px 0 16px; }
-  #check { font-size: 12px; padding: 3px 10px; }
-  .state { font-size: 13px; padding: 2px 10px; border-radius: 10px; white-space: nowrap;
-           border: 1px solid var(--frame); color: var(--text-color-muted, #666); }
-  .state.ждёт { color: var(--wait); }
-  .state.принята { color: var(--ok); }
-  .state.устарела, .state.отклонена { color: var(--bad); }
+  .meta button { font-size: 12px; padding: 3px 10px; }
   .comment { margin: 0 0 12px; color: var(--ink); font-style: italic; }
   .reason { margin: 0 0 12px; color: var(--bad); }
   .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
@@ -50,8 +45,6 @@
   button:hover:not(:disabled) { border-color: var(--frame-main); color: var(--ink); }
   button:disabled { opacity: .45; cursor: default; }
   button.accept { margin-left: auto; }
-  .bottom { display: flex; gap: 8px; margin-top: 16px; padding-bottom: 12px; }
-  .bottom .reject { margin-left: auto; }
   .idle { color: var(--text-color-muted, #666); margin-top: 20px; }
 </style></head>
 <body>
@@ -70,7 +63,17 @@ function diff(a, b){
     for (let j = m - 1; j >= 0; j--)
       L[i][j] = x[i] === y[j] ? L[i+1][j+1] + 1 : Math.max(L[i+1][j], L[i][j+1]);
   let out = "", i = 0, j = 0, del = "", ins = "";
-  const flush = () => { if (del) out += `<del>${esc(del)}</del>`; if (ins) out += `<ins>${esc(ins)}</ins>`; del = ins = ""; };
+  // Удалённые переводы строк не рисуются как пустые строки: иначе снятый
+  // хвостовой пробел перед абзацем удваивает отступ. Разница в одних
+  // пробелах показывается только новым вариантом.
+  const flush = () => {
+    if (del && ins && !del.trim() && !ins.trim()) out += esc(ins);
+    else {
+      if (del) out += `<del>${esc(del.replace(/\n/g, "¶"))}</del>`;
+      if (ins) out += `<ins>${esc(ins)}</ins>`;
+    }
+    del = ins = "";
+  };
   while (i < n || j < m){
     if (i < n && j < m && x[i] === y[j]){ flush(); out += esc(x[i]); i++; j++; }
     else if (j < m && (i === n || L[i][j+1] >= L[i+1][j])) ins += y[j++];
@@ -102,7 +105,8 @@ function render(s){
   const folder = String(s.path ?? "").replace(/[\\/]?[^\\/]*$/, "");
   let html = `<h1>${esc(s.document)}</h1>` +
     (folder ? `<div class="path">${esc(folder)}</div>` : "") +
-    `<div class="meta"><span class="state ${esc(s.state)}">${esc(s.state)}</span>${check}</div>`;
+    `<div class="meta">${check}<button class="reject" ${open ? "" : "disabled"}>Не принимать</button>` +
+    `<button class="clear" title="Убрать правку с панели">Очистить</button></div>`;
   if (s.comment) html += `<p class="comment">${esc(s.comment)}</p>`;
   if (s.reason && s.state === "устарела") html += `<p class="reason">${esc(s.reason)}</p>`;
   s.variants.forEach((v, k) => {
@@ -112,8 +116,6 @@ function render(s){
       `<button class="accept" data-k="${k}" ${open ? "" : "disabled"}>Принять</button></div>` +
       `<div class="text">${diff(s.original, v.text)}</div></div>`;
   });
-  html += `<div class="bottom"><button class="clear" title="Убрать правку с панели">Очистить</button>` +
-    `<button class="reject" ${open ? "" : "disabled"}>Не принимать</button></div>`;
   root.innerHTML = html;
   wire(s);
 }
