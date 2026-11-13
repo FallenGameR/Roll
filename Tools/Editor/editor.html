@@ -25,9 +25,10 @@
      кнопок справа. Статуса нет: после решения он ничего не даёт. */
   h1 { margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; overflow-wrap: anywhere; }
   .path { color: var(--text-color-muted, #666); font-size: 12px; margin: 4px 0 0; word-break: break-all; }
-  .meta { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px;
+  .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
           margin: 12px 0 16px; }
   .meta button { font-size: 12px; padding: 3px 10px; }
+  .meta #check { margin-left: auto; }
   .comment { margin: 0 0 12px; color: var(--ink); font-style: italic; }
   .reason { margin: 0 0 12px; color: var(--bad); }
   .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
@@ -105,8 +106,8 @@ function render(s){
   const folder = String(s.path ?? "").replace(/[\\/]?[^\\/]*$/, "");
   let html = `<h1>${esc(s.document)}</h1>` +
     (folder ? `<div class="path">${esc(folder)}</div>` : "") +
-    `<div class="meta">${check}<button class="reject" ${open ? "" : "disabled"}>Не принимать</button>` +
-    `<button class="clear" title="Убрать правку с панели">Очистить</button></div>`;
+    `<div class="meta"><button class="reject" ${open ? "" : "disabled"}>Не принимать</button>` +
+    `<button class="clear" title="Убрать правку с панели">Очистить</button>${check}</div>`;
   if (s.comment) html += `<p class="comment">${esc(s.comment)}</p>`;
   if (s.reason && s.state === "устарела") html += `<p class="reason">${esc(s.reason)}</p>`;
   s.variants.forEach((v, k) => {
