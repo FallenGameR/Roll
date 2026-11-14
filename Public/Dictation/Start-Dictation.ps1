@@ -54,6 +54,15 @@
     громкости в пульте, а ptt.py перечитывает его перед каждым звуком, поэтому
     новая громкость слышна сразу, без перезапуска.
 
+.PARAMETER Microphone
+    Часть имени микрофона, например Blue: запись идёт с первого микрофона, в
+    имени которого она есть, без учёта регистра. Если такого сейчас нет, то
+    с микрофона Windows по умолчанию, а когда нужный подключат, диктовка
+    перейдёт на него сама в течение 3 с. Запоминается в microphone.txt
+    рядом с логом, и следующие запуски, в том числе с пульта, берут его
+    оттуда. -Microphone '' возвращает микрофон Windows по умолчанию. Имена
+    микрофонов - в "Параметры - Система - Звук - Ввод".
+
 .PARAMETER Test
     Отладка: хук принимает синтетические нажатия и пишет события в лог.
 
@@ -66,7 +75,12 @@
 .EXAMPLE
     Stop-Dictation; Start-Dictation -ChimeVolume 1
 
-    Звуки записи на полную системную громкость на этой машине.#>
+    Звуки записи на полную системную громкость на этой машине.
+
+.EXAMPLE
+    Stop-Dictation; Start-Dictation -Microphone Blue
+
+    Писать с Blue Snowball, даже если Windows считает основным другой микрофон.#>
 function Start-Dictation {
     [CmdletBinding()]
     param(
@@ -75,6 +89,7 @@ function Start-Dictation {
         [string] $Encoder,
         [ValidateRange(0, 1)]
         [double] $ChimeVolume = -1,
+        [string] $Microphone,
         [switch] $Test,
         [int] $TimeoutSeconds = 180
     )
@@ -95,6 +110,19 @@ function Start-Dictation {
     if ($Encoder -notin 'auto', 'cuda', 'gpu', 'npu', 'off') { $Encoder = 'auto' }
 
     $culture = [Globalization.CultureInfo]::InvariantCulture
+
+    # -Microphone '' стирает выбор и возвращает микрофон Windows по умолчанию.
+    $micChosen = $PSBoundParameters.ContainsKey('Microphone')
+    if ($micChosen) {
+        $Microphone = $Microphone.Trim()
+        if ($Microphone) {
+            Set-Content -LiteralPath $paths.Microphone -Value $Microphone -Encoding utf8
+        } else {
+            Remove-Item -LiteralPath $paths.Microphone -ErrorAction SilentlyContinue
+        }
+    } elseif (Test-Path -LiteralPath $paths.Microphone) {
+        $Microphone = (Get-Content -LiteralPath $paths.Microphone -TotalCount 1 -Encoding utf8).Trim()
+    }
     $volumeChosen = $PSBoundParameters.ContainsKey('ChimeVolume')
     if ($volumeChosen) {
         Set-Content -LiteralPath $paths.ChimeVolume -Value $ChimeVolume.ToString($culture) -Encoding ascii
@@ -110,7 +138,7 @@ function Start-Dictation {
     }
 
     if (Get-DictationProcess) {
-        if ($chosen -or $volumeChosen) {
+        if ($chosen -or $volumeChosen -or $micChosen) {
             Write-Warning 'Диктовка уже запущена. Новые настройки записаны и включатся после Stop-Dictation и нового запуска.'
         } else {
             Write-Warning 'Диктовка уже запущена.'
@@ -127,6 +155,7 @@ function Start-Dictation {
         '--chime-volume', $ChimeVolume.ToString($culture))
     if ($cores) { $arguments += '--threads', $cores }
     if ($Test) { $arguments += '--test' }
+    if ($Microphone) { $arguments += '--mic', "`"$Microphone`"" }
     # Рабочая папка - домашняя папка диктовки: драйвер Intel при сборке
     # кодировщика под GPU кладёт в текущую папку kernel.errors.txt.
     Start-Process -FilePath $paths.PythonW -ArgumentList $arguments -WindowStyle Hidden -WorkingDirectory $paths.Home

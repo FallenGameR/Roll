@@ -54,6 +54,9 @@ parser.add_argument("--encoder", default="auto", choices=["auto", "cuda", "gpu",
 parser.add_argument("--chime-volume", type=float, default=0.1,
                     help="громкость звуков начала и конца записи, доля от системных "
                          "Speech On/Off.wav: 1 - как в Windows, 0 - без звука")
+parser.add_argument("--mic", default="",
+                    help="часть имени микрофона, например Blue; пусто или нет такого - "
+                         "микрофон Windows по умолчанию")
 args = parser.parse_args()
 
 MODEL = args.model
@@ -88,28 +91,46 @@ STATE_PATH = os.path.join(os.path.dirname(args.log), "state.json")
 last_run = {}
 state = {}
 mic = None
+# Чем открывать запись: None - микрофон Windows по умолчанию через MME, как
+# раньше, иначе номер устройства WASAPI для микрофона, выбранного --mic.
+mic_device = None
 
 
 def refresh_mic():
-    """Перечитывает микрофон по умолчанию и, если он сменился, сообщает пульту.
+    """Перечитывает микрофон и, если он сменился, сообщает пульту.
+
+    С --mic берётся первый микрофон, в имени которого есть эта строка, а
+    если такого сейчас нет - микрофон Windows по умолчанию.
 
     PortAudio запоминает список устройств при старте, и без перезапуска
-    запись шла бы с прежнего микрофона, даже когда в Windows выбран новый.
-    Переинициализация стоит около 30 мс, поэтому делается перед каждой
-    записью и раз в несколько секунд в простое. Зовётся только из потока
-    записи и до его запуска: PortAudio нельзя трогать, пока открыт поток.
-    Имя берётся из WASAPI: MME обрезает названия до 31 знака.
+    запись шла бы с прежнего микрофона, даже когда в Windows выбран новый
+    или нужный подключили заново. Переинициализация стоит около 30 мс,
+    поэтому делается перед каждой записью и раз в несколько секунд в
+    простое. Зовётся только из потока записи и до его запуска: PortAudio
+    нельзя трогать, пока открыт поток. Имя берётся из WASAPI: MME обрезает
+    названия до 31 знака.
     """
-    global mic
+    global mic, mic_device
     try:
         sd._terminate()
         sd._initialize()
-        device = next((h["default_input_device"] for h in sd.query_hostapis()
-                       if h["name"] == "Windows WASAPI" and h["default_input_device"] >= 0),
-                      sd.default.device[0])
+        wasapi = next((h for h in sd.query_hostapis() if h["name"] == "Windows WASAPI"), None)
+        chosen = None
+        if args.mic and wasapi:
+            chosen = next((i for i in wasapi["devices"]
+                           if sd.query_devices(i)["max_input_channels"] > 0
+                           and args.mic.lower() in sd.query_devices(i)["name"].lower()), None)
+        mic_device = chosen
+        if chosen is not None:
+            device = chosen
+        elif wasapi and wasapi["default_input_device"] >= 0:
+            device = wasapi["default_input_device"]
+        else:
+            device = sd.default.device[0]
         name = sd.query_devices(device)["name"] if device is not None and device >= 0 else ""
     except Exception as exc:  # noqa: BLE001
         log.info("Microphone lookup failed: %s", exc)
+        mic_device = None
         name = ""
     if name != mic:
         log.info("Microphone: %s", name or "none")
@@ -266,8 +287,17 @@ def recorder():
         refresh_mic()
         chunks = []
         start = time.time()
-        stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32",
-                                callback=lambda data, *_: chunks.append(data.copy()))
+        # WASAPI в общем режиме не даёт 16 кГц, если микрофон работает на
+        # 48 кГц: auto_convert просит Windows пересчитать частоту.
+        extra = sd.WasapiSettings(auto_convert=True) if mic_device is not None else None
+        try:
+            stream = sd.InputStream(device=mic_device, samplerate=SR, channels=1, dtype="float32",
+                                    extra_settings=extra,
+                                    callback=lambda data, *_: chunks.append(data.copy()))
+        except Exception as exc:  # noqa: BLE001
+            log.info("Microphone %s failed, using Windows default: %s", mic, exc)
+            stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32",
+                                    callback=lambda data, *_: chunks.append(data.copy()))
         stream.start()
         log.info("Recording...")
         set_state("recording")

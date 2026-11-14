@@ -18,6 +18,7 @@ function Get-DictationPath {
         Log          = Join-Path $dir 'dictation.log'
         Encoder      = Join-Path $dir 'encoder.txt'
         ChimeVolume  = Join-Path $dir 'chime-volume.txt'
+        Microphone   = Join-Path $dir 'microphone.txt'
         Script       = Join-Path $script:RollRoot 'Tools\Dictation\ptt.py'
         Requirements = Join-Path $script:RollRoot 'Tools\Dictation\requirements.txt'
         RequirementsCuda = Join-Path $script:RollRoot 'Tools\Dictation\requirements-cuda.txt'
