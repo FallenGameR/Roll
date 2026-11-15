@@ -8,7 +8,8 @@
                           'Winamp playlists, voice dictation, dice rolls, ' +
                           'PNG prompts and icons, Copilot control panel and ' +
                           'text-edit canvas, ' +
-                          'file transfer to reMarkable via RCU. ' +
+                          'file transfer to reMarkable via RCU, ' +
+                          'PDF adventures to Obsidian markdown. ' +
                           'Standalone scripts for maps, players, audio and ' +
                           'vault checks live in Tools.'
     PowerShellVersion  = '5.1'
@@ -40,7 +41,8 @@
         'Open-Remarkable',
         'Get-RemarkableConnection',
         'Set-RemarkableConnection',
-        'New-RemarkableCollection'
+        'New-RemarkableCollection',
+        'Convert-PdfToMarkdown'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()
