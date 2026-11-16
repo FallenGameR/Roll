@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Выбор вариантов</title>
+<style>
+  /* Палитра та же, что у «Правки текста»: пастель, тёплые чернила. */
+  :root { --status-bar-color: var(--background-color-default, #ffffff);
+          --ink: #9a4a2c; --ink-wash: rgba(196,120,80,.10); --frame: #e3d9cc; --frame-main: #d9b9a0;
+          --pick: #e4eedf; --pick-line: #a9c4a4; --ask: #f1e6ef; --ask-line: #c7a9c0; --muted-bg: rgba(127,127,127,.05); }
+  :root[data-color-mode="dark"], :root[data-theme-tone="dark"] {
+          --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --frame: #3b3631; --frame-main: #6b4f3e;
+          --pick: #2c3a2a; --pick-line: #4f6a4b; --ask: #382c36; --ask-line: #6a5266; --muted-bg: rgba(255,255,255,.03); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-color-mode]):not([data-theme-tone]) {
+          --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --frame: #3b3631; --frame-main: #6b4f3e;
+          --pick: #2c3a2a; --pick-line: #4f6a4b; --ask: #382c36; --ask-line: #6a5266; --muted-bg: rgba(255,255,255,.03); }
+  }
+  html, body { height: 100%; }
+  body { margin: 0; box-sizing: border-box; display: flex; flex-direction: column;
+         background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
+         font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 14px; line-height: 20px; }
+  header { padding: 12px 16px 10px; border-bottom: 1px solid var(--frame); }
+  h1 { margin: 0 0 6px; font-size: 20px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .count { color: var(--text-color-muted, #666); font-size: 13px; }
+  .bar label { font-size: 13px; color: var(--text-color-muted, #666); cursor: pointer; user-select: none; }
+  .bar .send { margin-left: auto; }
+  main { flex: 1; overflow: auto; padding: 4px 16px 24px; }
+  .row { display: grid; grid-template-columns: minmax(110px, 22%) 1fr; gap: 4px 12px;
+         padding: 8px 0; border-bottom: 1px solid var(--frame); }
+  .row.done .term b { color: var(--text-color-muted, #666); }
+  .term b { font-weight: 600; overflow-wrap: anywhere; }
+  .note { display: block; font-size: 11px; line-height: 15px; color: var(--text-color-muted, #666); }
+  .opts { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .v { font: inherit; font-size: 13px; padding: 2px 10px; border-radius: 12px; cursor: pointer;
+       border: 1px solid var(--frame); background: transparent; color: inherit; }
+  .v:hover:not(:disabled) { border-color: var(--frame-main); }
+  .v.rec { border-color: var(--frame-main); border-style: dashed; color: var(--ink); }
+  .v.on { background: var(--pick); border-color: var(--pick-line); border-style: solid; color: inherit; }
+  .own { font: inherit; font-size: 13px; padding: 2px 8px; width: 9em; border-radius: 12px;
+         border: 1px solid var(--frame); background: transparent; color: inherit; }
+  .own.on { background: var(--pick); border-color: var(--pick-line); }
+  .ask { font: inherit; font-size: 12px; padding: 2px 8px; border-radius: 12px; cursor: pointer;
+         border: 1px solid var(--frame); background: transparent; color: var(--text-color-muted, #666); }
+  .ask.on { background: var(--ask); border-color: var(--ask-line); color: inherit; }
+  .more { font-size: 12px; color: var(--text-color-muted, #666); cursor: pointer; text-decoration: underline dotted; }
+  .comment { grid-column: 2; font-size: 12px; line-height: 17px; color: var(--text-color-muted, #666); }
+  .remark { grid-column: 2; font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 6px;
+            border: 1px solid var(--frame); background: var(--muted-bg); color: inherit; }
+  button.send { font: inherit; font-size: 14px; padding: 4px 16px; border-radius: 6px; cursor: pointer;
+                border: 1px solid var(--frame-main); background: var(--ink-wash); color: var(--ink); }
+  button:disabled, input:disabled { opacity: .55; cursor: default; }
+  .sent { color: var(--ink); font-size: 13px; }
+  .idle { color: var(--text-color-muted, #666); padding: 20px 16px; }
+  main.undone .row.done { display: none; }
+</style></head>
+<body>
+<div id="root" style="display:contents"><div class="idle">Загружаю…</div></div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api = (p, body) => fetch("/pick" + p, {method: "POST", body: JSON.stringify(body ?? {})}).then((r) => r.json());
+
+let cur = null;      // порция на экране
+let shown = "";
+
+function decided(c){ return !!c && (c.kind === "variant" || c.kind === "skip" || (c.kind === "own" && !!c.text?.trim())); }
+
+async function poll(){
+  try {
+    const s = await api("/state");
+    const stamp = JSON.stringify([s.pid, s.state]);
+    if (stamp !== shown){ shown = stamp; cur = s; render(); }
+  } catch(e){ }
+}
+
+function rowHtml(r, locked){
+  const c = r.choice || {};
+  const dis = locked ? "disabled" : "";
+  const vs = r.variants.map((v, k) =>
+    `<button class="v${k === r.recommended ? " rec" : ""}${c.kind === "variant" && c.index === k ? " on" : ""}" data-k="${k}" ${dis}` +
+    `${k === r.recommended ? ' title="рекомендованный"' : ""}>${esc(v)}</button>`).join("");
+  const own = `<input class="own${c.kind === "own" && c.text ? " on" : ""}" placeholder="своё" value="${esc(c.kind === "own" ? c.text : "")}" ${dis}>`;
+  const ask = `<button class="ask${c.kind === "skip" ? " on" : ""}" title="не утверждать, обсудить" ${dis}>обсудить</button>`;
+  const showRemark = c.kind === "skip" || c.remark;
+  const more = showRemark ? "" : `<span class="more">комментарий</span>`;
+  return `<div class="row${decided(c) ? " done" : ""}" data-id="${esc(r.id)}">` +
+    `<div class="term"><b>${esc(r.term)}</b>${r.note ? `<span class="note">${esc(r.note)}</span>` : ""}</div>` +
+    `<div class="opts">${vs}${own}${ask}${locked ? "" : more}</div>` +
+    (r.comment ? `<div class="comment">${esc(r.comment)}</div>` : "") +
+    (showRemark ? `<input class="remark" placeholder="${c.kind === "skip" ? "вопрос для обсуждения" : "комментарий"}" value="${esc(c.remark || "")}" ${dis}>` : "") +
+    `</div>`;
+}
+
+function count(){
+  const done = cur.rows.filter((r) => decided(r.choice)).length;
+  document.getElementById("count").textContent = `решено ${done} из ${cur.rows.length}`;
+}
+
+function render(){
+  const root = document.getElementById("root");
+  if (!cur || !cur.pid){ root.innerHTML = `<div class="idle">Порции пока нет: сессия покажет здесь строки на выбор.</div>`; return; }
+  const locked = cur.state !== "ждёт";
+  root.innerHTML = `<header><h1>${esc(cur.title)}</h1><div class="bar">` +
+    `<span class="count" id="count"></span>` +
+    `<label><input type="checkbox" id="undone"> только нерешённые</label>` +
+    (locked ? `<span class="send sent">отправлено${cur.out ? "" : ""}</span>`
+            : `<button class="send" id="send">Отправить</button>`) +
+    `</div></header><main id="list">${cur.rows.map((r) => rowHtml(r, locked)).join("")}</main>`;
+  count();
+  document.getElementById("undone").onchange = (e) => document.getElementById("list").classList.toggle("undone", e.target.checked);
+  if (!locked) wire();
+}
+
+function rowOf(el){ const id = el.closest(".row").dataset.id; return cur.rows.find((r) => r.id === id); }
+
+function redraw(r){
+  const old = document.querySelector(`.row[data-id="${CSS.escape(r.id)}"]`);
+  const focus = document.activeElement && old.contains(document.activeElement) ? document.activeElement.className.split(" ")[0] : null;
+  const pos = focus ? document.activeElement.selectionStart : null;
+  old.outerHTML = rowHtml(r, false);
+  count();
+  if (focus){
+    const el = document.querySelector(`.row[data-id="${CSS.escape(r.id)}"] .${focus}`);
+    if (el){ el.focus(); if (pos != null && el.setSelectionRange) el.setSelectionRange(pos, pos); }
+  }
+}
+
+function set(r, choice, remark){
+  if (choice !== undefined) r.choice = choice ? { ...choice, remark: r.choice?.remark } : (r.choice?.remark ? { remark: r.choice.remark } : null);
+  if (remark !== undefined) r.choice = { ...(r.choice || {}), remark };
+  api("/choose", { pid: cur.pid, id: r.id, choice: choice === undefined ? undefined : (choice ? { ...choice } : null), remark });
+}
+
+const timers = {};
+function wire(){
+  const list = document.getElementById("list");
+  list.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.matches(".v")){
+      const r = rowOf(t), k = Number(t.dataset.k);
+      const on = r.choice?.kind === "variant" && r.choice.index === k;
+      set(r, on ? null : { kind: "variant", index: k }); redraw(r);
+    } else if (t.matches(".ask")){
+      const r = rowOf(t);
+      set(r, r.choice?.kind === "skip" ? null : { kind: "skip" }); redraw(r);
+      if (r.choice?.kind === "skip") document.querySelector(`.row[data-id="${CSS.escape(r.id)}"] .remark`)?.focus();
+    } else if (t.matches(".more")){
+      const r = rowOf(t);
+      r.choice = { ...(r.choice || {}), remark: r.choice?.remark || " " };
+      redraw(r);
+      const el = document.querySelector(`.row[data-id="${CSS.escape(r.id)}"] .remark`);
+      el.value = ""; el.focus();
+    }
+  });
+  list.addEventListener("input", (e) => {
+    const t = e.target, r = rowOf(t);
+    const key = r.id + (t.matches(".own") ? "/own" : "/remark");
+    clearTimeout(timers[key]);
+    if (t.matches(".own")){
+      const text = t.value;
+      r.choice = text.trim() ? { kind: "own", text, remark: r.choice?.remark } : (r.choice?.remark ? { remark: r.choice.remark } : null);
+      t.classList.toggle("on", !!text.trim());
+      t.closest(".row").querySelectorAll(".v.on").forEach((b) => b.classList.remove("on"));
+      t.closest(".row").querySelector(".ask").classList.remove("on");
+      t.closest(".row").classList.toggle("done", decided(r.choice));
+      count();
+      timers[key] = setTimeout(() => api("/choose", { pid: cur.pid, id: r.id,
+        choice: text.trim() ? { kind: "own", text } : null }), 300);
+    } else if (t.matches(".remark")){
+      r.choice = { ...(r.choice || {}), remark: t.value };
+      timers[key] = setTimeout(() => api("/choose", { pid: cur.pid, id: r.id, remark: t.value }), 300);
+    }
+  });
+  document.getElementById("send").onclick = async (e) => {
+    const undone = cur.rows.filter((r) => !decided(r.choice)).length;
+    if (undone && !confirm(`Без решения строк: ${undone}. Всё равно отправить?`)) return;
+    e.target.disabled = true; e.target.textContent = "Отправляю…";
+    // Дать уйти отложенным правкам полей ввода.
+    await new Promise((r) => setTimeout(r, 400));
+    await api("/submit", { pid: cur.pid });
+    shown = ""; poll();
+  };
+}
+
+setInterval(poll, 1500); poll();
+</script>
+</body></html>

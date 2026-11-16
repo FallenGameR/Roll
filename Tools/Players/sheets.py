@@ -107,6 +107,9 @@ def md(text):
 def _plain(s):
     s = html.escape(s)
     s = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", s)
+    # `DC 12`, `2d6` - в кампании сложности и кости в обратных кавычках;
+    # на листе кавычки не нужны, но рвать такое переносом нельзя.
+    s = re.sub(r"`([^`]+)`", r'<span class="nw">\1</span>', s)
     s = re.sub(r"(?i)(спелл-слот\w*)", r'<span class="nw">\1</span>', s)
     # запас спелл-слотов: каждый круг своей строкой, точка после него не нужна
     s = re.sub(r"\s*(([①-⑨])\2*)[.;]?\s*", r'<span class="row">\1</span>', s)
@@ -257,14 +260,16 @@ def items_block(card, notes):
 
 
 def sync_card_items(card, notes):
-    """Переписывает ключ `items` в статблоке карточки по списку `items` в её шапке.
+    """Переписывает ключ `magic_items` в статблоке карточки по списку `items` в её шапке.
 
     Статблок рисует их разделом "Предметы" макета "Лист игрока"; других ключей не трогает.
+    Ключ не `items`: Initiative Tracker отдаёт Fantasy Statblocks шапку карточки, и
+    шапочный `items` (список ссылок) затирал бы статблочный.
     """
     f = PLAYERS / f"{card}.md"
     t = f.read_text(encoding="utf-8")
     m = re.search(r"```statblock\n(.*?)\n```", t, re.S)
-    blk = re.sub(r'(?m)^"items":\n(?:  [^\n]*\n?)*', "", m.group(1) + "\n").rstrip("\n")
+    blk = re.sub(r'(?m)^"magic_items":\n(?:  [^\n]*\n?)*', "", m.group(1) + "\n").rstrip("\n")
     before = yaml.safe_load(m.group(1))
     lines = []
     for i in owned_items(card, notes):
@@ -272,9 +277,10 @@ def sync_card_items(card, notes):
         lines.append(f'  - "desc": {json.dumps(i["desc"], ensure_ascii=False)}')
         lines.append(f'    "name": {json.dumps(link + i["mark"], ensure_ascii=False)}')
     if lines:
-        blk += '\n"items":\n' + "\n".join(lines)
+        blk += '\n"magic_items":\n' + "\n".join(lines)
     after = yaml.safe_load(blk)
-    assert {k: v for k, v in after.items() if k != "items"} == {k: v for k, v in before.items() if k != "items"}
+    assert ({k: v for k, v in after.items() if k != "magic_items"}
+            == {k: v for k, v in before.items() if k != "magic_items"})
     t2 = t[:m.start(1)] + blk + t[m.end(1):]
     if t2 != t:
         with open(f, "w", encoding="utf-8", newline="\n") as fh:
@@ -316,7 +322,7 @@ ran, pal, bard, sor, rog = feat("ranger"), feat("paladin"), feat("bard"), feat("
 LEARN = "Что можно выучить"
 
 SHEETS = {
-    "Кали Мейхем": lambda: sheet("Кали Мейхем", "druid", TIEFLING_RACE, {
+    "Кали": lambda: sheet("Кали", "druid", TIEFLING_RACE, {
         "Адская стойкость": TIEFLING,
         "Адское наследие": TIEFLING,
         "Дикий облик": dru("feature.wild-shape"),
@@ -332,7 +338,7 @@ SHEETS = {
         "Сражение вслепую": ran("feature.fighting-style"),
     }, tail=prepare_block("ranger", 1, LEARN)),
 
-    "Дворик Трахак": lambda: sheet("Дворик Трахак", "paladin", DWARF_RACE, {
+    "Дворик": lambda: sheet("Дворик", "paladin", DWARF_RACE, {
         "Божественная кара": pal("feature.divine-smite"),
         "Божественное чувство": pal("feature.divine-sense"),
         "Дворфийская стойкость": DWARF_RACE,
@@ -365,12 +371,17 @@ SHEETS = {
         "Источник магии": sor("feature.font-of-magic"),
     }, tail=prepare_block("sorcerer", 1, LEARN)),
 
-    "Калиостро Великолепный": lambda: sheet("Калиостро Великолепный", "rogue", TIEFLING_RACE, {
+    "Калиостро": lambda: sheet("Калиостро", "rogue", TIEFLING_RACE, {
         "Адская стойкость": TIEFLING,
         "Адское наследие": TIEFLING,
         "Скрытая атака": rog("feature.sneak-attack"),
         "Экспертиза": rog("feature.expertise"),
         "Хитрое действие": rog("feature.cunning-action"),
+    }, item_notes={
+        # Своей сложности у шляпы нет, она берёт Сл заклинаний носителя:
+        # Харизма от Адского наследия, 8 + мастерство 2 + Харизма 2.
+        "Шляпа маскировки": "Пока надета, действием даёт [[disguise-self|Маскировку]] сколько угодно раз. "
+                            "Распознать её можно действием: проверка [[Навыки#Расследование|Расследования]] `DC 12`.",
     }),
 }
 

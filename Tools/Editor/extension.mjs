@@ -17,16 +17,23 @@ process.on("unhandledRejection", (e) => process.stderr.write(`unhandled: ${e?.st
 // Расширение подключается заглушкой из ~/.copilot/extensions, поэтому
 // соседние файлы ищутся от настоящего пути этого файла.
 const HERE = dirname(realpathSync(fileURLToPath(import.meta.url)));
-const LOGIC = join(HERE, "logic.mjs");
-const PAGE = join(HERE, "editor.html");
 
-let loaded = { mtime: 0, module: null };
-async function logic() {
-    const { mtimeMs } = await stat(LOGIC);
-    if (mtimeMs !== loaded.mtime) {
-        loaded = { mtime: mtimeMs, module: await import(`${pathToFileURL(LOGIC).href}?v=${mtimeMs}`) };
+// Два canvas на одном сервере: «Правка текста» (logic.mjs, editor.html) в
+// корне и «Выбор вариантов» (pick.mjs, pick.html) под /pick. Модули
+// перечитываются при каждом изменении файла.
+const PARTS = {
+    editor: { logic: join(HERE, "logic.mjs"), page: join(HERE, "editor.html") },
+    pick: { logic: join(HERE, "pick.mjs"), page: join(HERE, "pick.html") },
+};
+
+const loaded = {};
+async function logic(part = "editor") {
+    const file = PARTS[part].logic;
+    const { mtimeMs } = await stat(file);
+    if (loaded[part]?.mtime !== mtimeMs) {
+        loaded[part] = { mtime: mtimeMs, module: await import(`${pathToFileURL(file).href}?v=${mtimeMs}`) };
     }
-    return loaded.module;
+    return loaded[part].module;
 }
 
 function readBody(req) {
@@ -46,10 +53,12 @@ async function ensureServer() {
     if (server) return server.url;
     const http = createServer(async (req, res) => {
         try {
-            const route = (await logic()).routes[req.url];
+            const part = req.url.startsWith("/pick") ? "pick" : "editor";
+            const path = part === "pick" ? req.url.slice(5) || "/" : req.url;
+            const route = (await logic(part)).routes[path];
             if (!route) {
                 res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-                res.end(await readFile(PAGE, "utf8"));
+                res.end(await readFile(PARTS[part].page, "utf8"));
                 return;
             }
             const body = JSON.stringify(await route({ session, body: await readBody(req) }));
@@ -65,12 +74,12 @@ async function ensureServer() {
     return server.url;
 }
 
-const action = (name, description, inputSchema) => ({
+const action = (name, description, inputSchema, part = "editor") => ({
     name,
     description,
     inputSchema,
     handler: async (ctx) => {
-        const handler = (await logic()).actions[name];
+        const handler = (await logic(part)).actions[name];
         if (!handler) throw CanvasError.noHandler();
         try {
             return await handler({ session, input: ctx.input ?? {} });
@@ -110,6 +119,45 @@ session = await joinSession({
                 action("status", "Последняя правка и её состояние: ждёт, принята (с номером варианта), отклонена или устарела."),
             ],
             open: async () => ({ title: "Правка текста", url: await ensureServer() }),
+        }),
+        createCanvas({
+            id: "roll-pick",
+            displayName: "Выбор вариантов",
+            description: "Таблица строк с вариантами (например, глоссарий перевода): Мастер выбирает вариант одним кликом, пишет свой или откладывает на обсуждение, и отправляет решения в сессию.",
+            actions: [
+                action("propose",
+                    "Показать порцию строк. rows - строки, либо tsv - путь к TSV с колонками term, variants (через «; »), " +
+                    "comment и необязательными id, recommended, group, category, book; group отбирает строки TSV по колонке group. " +
+                    "Заменяет прежнюю порцию. По кнопке «Отправить» решения придут в сессию сообщением [Выбор вариантов] " +
+                    "и будут записаны в TSV рядом с состоянием сессии.",
+                    {
+                        type: "object",
+                        properties: {
+                            title: { type: "string" },
+                            rows: {
+                                type: "array",
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        id: { type: "string" },
+                                        term: { type: "string" },
+                                        variants: { type: "array", items: { type: "string" } },
+                                        comment: { type: "string" },
+                                        recommended: { type: ["integer", "string"],
+                                            description: "Номер варианта с нуля или его текст." },
+                                        note: { type: "string" },
+                                    },
+                                    required: ["term", "variants"],
+                                },
+                            },
+                            tsv: { type: "string", description: "Полный путь к TSV (UTF-8, TAB)." },
+                            group: { type: "string" },
+                        },
+                        required: ["title"],
+                    }, "pick"),
+                action("status", "Текущая порция: решения по строкам, сколько решено, отправлена ли.", undefined, "pick"),
+            ],
+            open: async () => ({ title: "Выбор вариантов", url: (await ensureServer()) + "pick" }),
         }),
     ],
 });
