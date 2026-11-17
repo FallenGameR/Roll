@@ -28,7 +28,7 @@ Import-Module .\Roll\Roll.psd1
 Что понадобится по темам:
 
 - PowerShell 7 для всего модуля;
-- для диктовки - Python 3.9 (`py -3.9`) и один раз `Install-Dictation`: он соберёт venv в `%LOCALAPPDATA%\Roll\dictation`. Модели скачаются из Hugging Face при первом запуске, около 2 ГБ;
+- для диктовки - Python 3.9 (`py -3.9`) и `Install-Dictation`: он соберёт venv в `%LOCALAPPDATA%\Roll\dictation`, а при карте NVIDIA доставит cuBLAS и cuDNN для CUDA, около 1 ГБ. Модели скачаются из Hugging Face при первом запуске, около 2 ГБ. После `git pull`, который меняет `Tools\Dictation\requirements*.txt`, `Install-Dictation` запускают снова и перезапускают диктовку: venv сам не обновляется. Так на машине с NVIDIA T1000, где venv собрали до поддержки CUDA, диктовка шла на процессоре; в логе это видно по строке `CUDA: NVIDIA card found, but no nvidia-cublas-cu12...`;
 - для музыки - ffmpeg и yt-dlp (`winget install Gyan.FFmpeg yt-dlp.yt-dlp`);
 - для плейлистов - Winamp и Python с пакетом `mutagen`;
 - для reMarkable - [RCU](http://www.davisr.me/projects/rcu/) с настроенным пресетом подключения;

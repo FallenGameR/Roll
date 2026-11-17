@@ -88,6 +88,21 @@ restart xochitl`): это закрывает открытый документ. 
 `Open-Remarkable`; инструкция к RCU - `C:\tools\RCU\User Manual.pdf`,
 CLI в главе 4.
 
+## Диктовка после обновления
+
+venv диктовки в `%LOCALAPPDATA%\Roll\dictation` сам за репозиторием
+не обновляется. Если `git pull` поменял `Tools\Dictation\requirements*.txt`
+или под стадией в пульте стоит CPU при карте NVIDIA, порядок такой:
+`Install-Dictation` (при NVIDIA он доставит cuBLAS и cuDNN, около 1 ГБ),
+затем `Stop-Dictation; Start-Dictation`. Успех виден в логе строками
+`Encoder auto: cuda` и `Ready ... (encoder CUDA ...)`. Строка
+`CUDA: NVIDIA card found, but no nvidia-cublas-cu12...` значит, что
+`Install-Dictation` ещё не запускали.
+
+Перезапуск диктовки из сессии агента запускают отдельным процессом
+(detached): модель грузится до 20 с, и если команда агента оборвётся
+раньше, вместе с ней умрёт и только что запущенный `ptt.py`.
+
 ## Как добавить команду
 
 `Roll.psm1` подхватывает все `.ps1` из `Public` и `Private` сам, но
