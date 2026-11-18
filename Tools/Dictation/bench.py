@@ -22,6 +22,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from cuda_model import load_cuda_model
+from language import PROMPTS, load_detector, pick_language
 from ov_encoder import attach_openvino_encoder
 
 ap = argparse.ArgumentParser()
@@ -32,7 +33,6 @@ ap.add_argument("--threads", default="0")
 args = ap.parse_args()
 
 DIR = os.path.join(os.environ["LOCALAPPDATA"], "Roll", "dictation", "recordings")
-PROMPT = "Сделай commit и открой pull request в GitHub, потом запусти тесты в PowerShell."
 
 
 def load(path):
@@ -68,6 +68,10 @@ print(f"записей {len(audio)}, звука {sum(len(a) for _, a in audio) /
 log = logging.getLogger("bench")
 logging.basicConfig(level=logging.WARNING, format="  %(message)s")
 log.setLevel(logging.INFO)
+# Язык каждой записи выбирается один раз, как в ptt.py, и в замер не идёт:
+# сравниваются настройки распознавания, а не выбор языка.
+detector = load_detector(0, log)
+languages = [pick_language(detector, a, log) for _, a in audio]
 reference = None
 for encoder_wanted, threads in itertools.product(args.encoders.split(","),
                                                  [int(t) for t in args.threads.split(",")]):
@@ -78,14 +82,14 @@ for encoder_wanted, threads in itertools.product(args.encoders.split(","),
         model = WhisperModel(args.model, device="cpu", compute_type="int8", cpu_threads=threads)
         encoder = attach_openvino_encoder(model, encoder_wanted, log)
     for beam in [int(b) for b in args.beams.split(",")]:
-        def run(a):
-            segments, _ = model.transcribe(a, language="ru", initial_prompt=PROMPT,
+        def run(a, language="ru"):
+            segments, _ = model.transcribe(a, language=language, initial_prompt=PROMPTS[language],
                                            vad_filter=True, beam_size=beam)
             return " ".join(s.text.strip() for s in segments).strip()
 
         run(audio[0][1])
         t = time.time()
-        texts = [run(a) for _, a in audio]
+        texts = [run(a, lang) for (_, a), lang in zip(audio, languages)]
         took = time.time() - t
         label = f"encoder {encoder}, threads {threads or 'default'}, beam {beam}"
         print(f"\n{label}: {took:.1f} с")

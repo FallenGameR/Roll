@@ -1,6 +1,6 @@
 """Push-to-talk dictation: hold the Copilot, Menu or right Win key, speak, release - text is typed at the cursor.
 
-Usage: pythonw ptt.py [model] [--log PATH] [--encoder auto|cuda|gpu|npu|off] [--test]
+Usage: pythonw ptt.py [model] [--log PATH] [--encoder auto|cuda|gpu|npu|off] [--language auto|ru|en] [--test]
 Managed by Start-Dictation / Stop-Dictation / Get-Dictation from the Roll module.
 """
 import argparse
@@ -30,6 +30,7 @@ import sounddevice as sd
 from faster_whisper import WhisperModel
 
 from cuda_model import load_cuda_model
+from language import PROMPTS, detect_pair, load_detector, pick_language
 from ov_encoder import attach_openvino_encoder, pick_device
 
 parser = argparse.ArgumentParser()
@@ -57,13 +58,15 @@ parser.add_argument("--chime-volume", type=float, default=0.1,
 parser.add_argument("--mic", default="",
                     help="часть имени микрофона, например Blue; пусто или нет такого - "
                          "микрофон Windows по умолчанию")
+parser.add_argument("--language", default="auto", choices=["auto", "ru", "en"],
+                    help="язык фраз: auto - русский или английский по каждой фразе, "
+                         "см. language.py; ru или en - всегда этот")
 args = parser.parse_args()
 
 MODEL = args.model
 ACCEPT_INJECTED = args.test
 MIN_SECONDS = 0.4
 SR = 16000
-PROMPT = "Сделай commit и открой pull request в GitHub, потом запусти тесты в PowerShell."
 
 VK_F23 = 0x86  # Copilot key sends Win+Shift+F23
 VK_APPS = 0x5D  # Menu key: sits where the Copilot key is on keyboards without one
@@ -207,8 +210,9 @@ if model is not None:
     encoder = "CUDA"
 else:
     model, encoder = load_cpu_model("off" if wanted == "cuda" else wanted)
-log.info("Ready. Hold the Copilot, Menu or right Win key to dictate (encoder %s, beam %d, threads %s).",
-         encoder, args.beam, args.threads or "default")
+detector = load_detector(args.threads, log) if args.language == "auto" else None
+log.info("Ready. Hold the Copilot, Menu or right Win key to dictate (encoder %s, beam %d, threads %s, language %s).",
+         encoder, args.beam, args.threads or "default", args.language)
 set_state("ready")
 winsound.Beep(1200, 80)
 
@@ -302,10 +306,12 @@ def recorder():
         log.info("Recording...")
         set_state("recording")
         chime("Speech On.wav")
+        early = EarlyLanguage(chunks)
         while commands.get() != "stop":
             pass
         stream.stop()
         stream.close()
+        early.stop()
         duration = time.time() - start
         if held["cancelled"] or duration < MIN_SECONDS or not chunks:
             log.info("Skipped (cancelled=%s, %.1fs)", held["cancelled"], duration)
@@ -314,7 +320,49 @@ def recorder():
         chime("Speech Off.wav")
         audio = np.concatenate(chunks).flatten()
         keep_recording(audio)
-        transcribe(audio, duration)
+        transcribe(audio, duration, early.result())
+
+
+# Язык фразы выбирается, пока она ещё звучит: tiny на процессоре раз в
+# секунду переопределяет его по всему, что уже записано, и при отпускании
+# клавиши берётся последний ответ, если он уверенный. Первые секунды часто
+# одно "Ну, ..." - по 2.5 с русская фраза выходила английской, по 4.5 с уже
+# верно. Неуверенный ответ или фраза короче DETECT_AFTER - язык по всей
+# записи после отпускания, это около 0.3 с.
+DETECT_AFTER = 2.5
+DETECT_EVERY = 1.0
+SURE = 0.9
+
+
+class EarlyLanguage:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.done = threading.Event()
+        self.found = None
+        self.thread = None
+        if detector is not None:
+            self.thread = threading.Thread(target=self.run, daemon=True)
+            self.thread.start()
+
+    def run(self):
+        checked = 0
+        while not self.done.wait(0.1):
+            heard = list(self.chunks)
+            size = sum(len(c) for c in heard)
+            if size >= DETECT_AFTER * SR and size - checked >= DETECT_EVERY * SR:
+                checked = size
+                self.found = detect_pair(detector, np.concatenate(heard).flatten(), log)
+
+    def stop(self):
+        self.done.set()
+
+    def result(self):
+        # Не ждём прогон, который идёт прямо сейчас: последний готовый ответ
+        # отстаёт от конца фразы меньше чем на секунду.
+        found = self.found
+        if found and found[1] >= SURE:
+            return found[0]
+        return None
 
 
 RECORDINGS = os.path.join(os.path.dirname(args.log), "recordings")
@@ -338,7 +386,7 @@ def keep_recording(audio):
         log.info("Recording not kept: %s", exc)
 
 
-def recognize(audio, seconds):
+def recognize(audio, seconds, language=None):
     """Возвращает (подготовка, речь, текст, декодирование).
 
     transcribe() сразу отрезает тишину (VAD) и считает признаки звука, а
@@ -348,7 +396,11 @@ def recognize(audio, seconds):
     целого окна, а фраза почти всегда укладывается в одно окно.
     """
     t = time.time()
-    segments, info = model.transcribe(audio, language="ru", initial_prompt=PROMPT,
+    if args.language != "auto":
+        language = args.language
+    elif language is None:
+        language = pick_language(detector, audio, log)
+    segments, info = model.transcribe(audio, language=language, initial_prompt=PROMPTS[language],
                                       vad_filter=True, beam_size=args.beam)
     prepared = time.time() - t
     speech = getattr(info, "duration_after_vad", seconds) or seconds
@@ -358,12 +410,12 @@ def recognize(audio, seconds):
     return prepared, speech, text, time.time() - t
 
 
-def transcribe(audio, recorded):
+def transcribe(audio, recorded, language=None):
     global model, encoder
     seconds = len(audio) / SR
     set_state("preparing", audio=round(seconds, 1))
     try:
-        prepared, speech, text, decoded = recognize(audio, seconds)
+        prepared, speech, text, decoded = recognize(audio, seconds, language)
     except Exception as exc:  # noqa: BLE001
         if encoder != "CUDA":
             raise
@@ -371,7 +423,7 @@ def transcribe(audio, recorded):
         # Тогда до перезапуска считаем на процессоре, а пульт покажет CPU.
         log.info("CUDA failed, back to CPU until restart: %s", exc)
         model, encoder = load_cpu_model("off")
-        prepared, speech, text, decoded = recognize(audio, seconds)
+        prepared, speech, text, decoded = recognize(audio, seconds, language)
     log.info("%.1fs audio -> %.1fs: %s", seconds, prepared + decoded, text)
     typed = 0.0
     if text:
