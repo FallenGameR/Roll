@@ -150,6 +150,7 @@
   let busy = false;
   let winampUrl = "";
   let lastPhrase = null;
+  let lastAt = null;
 
   // Стадия диктовки: ptt.py пишет state.json на каждой смене, страница
   // спрашивает его дважды в секунду, пока диктовка запущена, и сама
@@ -193,6 +194,10 @@
       // Разбор последней фразы, одной строкой: запись, подготовка,
       // распознавание, печать. Расшифровка - в подсказке.
       const l = s.last || {};
+      // ptt.py пишет фразу в лог раньше, чем last.at в state.json, поэтому
+      // новый last.at значит, что журнал уже можно перечитать. Без этого
+      // фраза ждала общего опроса раз в 5 с, а он сам идёт около секунды.
+      if (l.at && l.at !== lastAt) { if (lastAt !== null) loadLog(); lastAt = l.at; }
       if (l.at) {
         const total = (l.record || 0) + (l.prepare || 0) + (l.decode || 0) + (l.type || 0);
         const n = l.chars, tail = n % 10, teen = n % 100 >= 11 && n % 100 <= 14;
