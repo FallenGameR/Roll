@@ -179,9 +179,13 @@
       // В покое под стадией видно, где считается модель: CUDA, GPU, NPU или
       // CPU. После отката или сбоя CUDA и OpenVINO там окажется CPU.
       const where = ["CUDA", "GPU", "NPU", "CPU"].includes(s.encoder) ? s.encoder : "";
-      // Рядом - микрофон по умолчанию, с которого пойдёт запись. Windows
-      // зовёт их "Microphone (Blue Snowball)", в пульте остаётся суть.
-      const mic = (s.mic ?? "").replace(/^(?:Microphone(?: Array)?|Микрофон)\s*\((.*)\)$/i, "$1");
+      // Рядом - микрофон, с которого пойдёт запись. Windows зовёт его
+      // «имя (описание драйвера)»: «Microphone (Blue Snowball)», «Microphone
+      // Array (Intel® Smart Sound Technology for Digital Microphones)». Суть -
+      // в скобках, а длинное описание ужимается до первого слова, марки:
+      // «Intel» говорит «встроенный» не хуже полного названия.
+      let mic = (s.mic ?? "").replace(/^[^(]*\((.*)\)\s*$/, "$1").trim();
+      if (mic.length > 20) mic = mic.split(/\s+/)[0].replace(/[®™©]/g, "");
       const idle = s.mic === "" ? `нет микрофона · ${where}` : [mic, where].filter(Boolean).join(" · ");
       let info = s.stage === "ready" ? idle : sec(elapsed);
       if (s.stage === "recording" && mic) info = `${mic} · ${info}`;

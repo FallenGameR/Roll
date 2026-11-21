@@ -107,9 +107,10 @@ def refresh_mic():
 
     PortAudio запоминает список устройств при старте, и без перезапуска
     запись шла бы с прежнего микрофона, даже когда в Windows выбран новый
-    или нужный подключили заново. Переинициализация стоит около 30 мс,
-    поэтому делается перед каждой записью и раз в несколько секунд в
-    простое. Зовётся только из потока записи и до его запуска: PortAudio
+    или нужный подключили заново. Сама переинициализация стоит около 30 мс,
+        но требует закрыть поток микрофона, а закрыть и открыть его - почти
+        секунда. Поэтому делается в простое раз в MIC_REFRESH_EVERY секунд, см.
+        Mic. Зовётся только из потока записи и до его запуска: PortAudio
     нельзя трогать, пока открыт поток. Имя берётся из WASAPI: MME обрезает
     названия до 31 знака.
     """
@@ -274,43 +275,188 @@ def chime(name):
     if volume <= 0:
         return
     if CHIMES.get(name, (None,))[0] != volume:
-        CHIMES[name] = (volume, quiet_wav(name, volume))
+        path = quiet_wav(name, volume)
+        CHIMES[name] = (volume, path, wav_samples(path))
         log.info("Chime %s at volume %.2f", name, volume)
-    winsound.PlaySound(CHIMES[name][1], winsound.SND_FILENAME | winsound.SND_ASYNC)
+    _, path, samples = CHIMES[name]
+    if samples is None or not speaker.play(samples):
+        winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
 
 
-def recorder():
-    while True:
+CHIME_RATE = 44100
+
+
+def wav_samples(path):
+    """Стерео float32 для Speaker или None, если файл не 16-битный 44.1 кГц."""
+    try:
+        with wave.open(path, "rb") as src:
+            p = src.getparams()
+            frames = src.readframes(p.nframes)
+        if p.sampwidth != 2 or p.framerate != CHIME_RATE:
+            return None
+        a = np.frombuffer(frames, dtype="<i2").reshape(-1, p.nchannels).astype("float32") / 32768
+        return np.repeat(a, 2, axis=1) if p.nchannels == 1 else a[:, :2]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+class Speaker:
+    """Динамики для звонков, открытые заранее.
+
+    winsound.PlaySound открывает устройство на каждый звук: на Realtek этого
+    ноутбука это около 240 мс плюс 180 мс буфера, и звонок опаздывал почти
+    на полсекунды от нажатия. Поток WASAPI с маленьким буфером открыт всё
+    время, но не запущен: такой поток не держит устройство и не тратит
+    процессор, а запускается за единицы миллисекунд, буфер 20-30 мс.
+    """
+
+    def __init__(self):
+        self.stream = None
+        self.data = None
+        self.pos = 0
+
+    def _callback(self, out, frames, *_):
+        data, n = self.data, 0
+        if data is not None:
+            n = min(frames, len(data) - self.pos)
+            out[:n] = data[self.pos:self.pos + n]
+            self.pos += n
+        out[n:] = 0
+        if data is None or self.pos >= len(data):
+            raise sd.CallbackStop
+
+    def open(self):
+        if self.stream is not None:
+            return
+        wasapi = next((h for h in sd.query_hostapis() if h["name"] == "Windows WASAPI"), None)
+        if not wasapi or wasapi["default_output_device"] < 0:
+            return
         try:
-            cmd = commands.get(timeout=3)
-        except queue.Empty:
-            refresh_mic()
-            continue
-        if cmd != "start":
-            continue
-        refresh_mic()
-        chunks = []
-        start = time.time()
+            self.stream = sd.OutputStream(device=wasapi["default_output_device"], samplerate=CHIME_RATE,
+                                          channels=2, dtype="float32", latency="low",
+                                          extra_settings=sd.WasapiSettings(auto_convert=True),
+                                          callback=self._callback)
+        except Exception as exc:  # noqa: BLE001
+            log.info("Speakers not opened, chimes via winsound: %s", exc)
+
+    def play(self, samples):
+        if self.stream is None:
+            return False
+        try:
+            self.stream.stop()  # прошлый звонок, если ещё звучит
+            self.data, self.pos = samples, 0
+            self.stream.start()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.info("Chime on speakers failed, winsound instead: %s", exc)
+            self.close()
+            return False
+
+    def close(self):
+        if self.stream is not None:
+            try:
+                self.stream.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self.stream = None
+
+
+speaker = Speaker()
+
+
+class Mic:
+    """Поток микрофона, открытый заранее и запускаемый только на время фразы.
+
+    Открыть поток WASAPI стоит 250-350 мс, закрыть - около 500 мс (замер на
+    Intel Smart Sound, ноябрь 2026). Когда поток открывался по нажатию и
+    закрывался по отпусканию, на столько же опаздывали и звук начала, и
+    распознавание. Теперь по клавишам только start и stop, это единицы мс.
+    """
+
+    def __init__(self):
+        self.stream = None
+        self.chunks = []
+
+    def _callback(self, data, *_):
+        self.chunks.append(data.copy())
+
+    def open(self):
+        if self.stream is not None:
+            return
         # WASAPI в общем режиме не даёт 16 кГц, если микрофон работает на
         # 48 кГц: auto_convert просит Windows пересчитать частоту.
         extra = sd.WasapiSettings(auto_convert=True) if mic_device is not None else None
         try:
-            stream = sd.InputStream(device=mic_device, samplerate=SR, channels=1, dtype="float32",
-                                    extra_settings=extra,
-                                    callback=lambda data, *_: chunks.append(data.copy()))
+            self.stream = sd.InputStream(device=mic_device, samplerate=SR, channels=1, dtype="float32",
+                                         extra_settings=extra, callback=self._callback)
         except Exception as exc:  # noqa: BLE001
             log.info("Microphone %s failed, using Windows default: %s", mic, exc)
-            stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32",
-                                    callback=lambda data, *_: chunks.append(data.copy()))
-        stream.start()
+            self.stream = sd.InputStream(samplerate=SR, channels=1, dtype="float32",
+                                         callback=self._callback)
+
+    def close(self):
+        if self.stream is not None:
+            try:
+                self.stream.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self.stream = None
+
+    def reopen(self):
+        # refresh_mic перезапускает PortAudio, а это можно только без
+        # открытых потоков, поэтому заодно переоткрываются и динамики:
+        # так подхватываются и сменённые в Windows наушники.
+        self.close()
+        speaker.close()
+        refresh_mic()
+        self.open()
+        speaker.open()
+
+
+# Как часто в простое перечитывать микрофон: смена микрофона в Windows
+# подхватывается с такой задержкой. Нажатие, пришедшее как раз во время
+# перечитывания, подождёт его, это до секунды.
+MIC_REFRESH_EVERY = 10
+
+
+def recorder():
+    mic_stream = Mic()
+    refreshed = 0.0
+    while True:
+        try:
+            cmd = commands.get(timeout=3)
+        except queue.Empty:
+            if time.time() - refreshed >= MIC_REFRESH_EVERY or mic_stream.stream is None:
+                try:
+                    mic_stream.reopen()
+                except Exception as exc:  # noqa: BLE001
+                    log.info("Microphone not opened: %s", exc)
+                refreshed = time.time()
+            continue
+        if cmd != "start":
+            continue
+        chunks = mic_stream.chunks = []
+        start = time.time()
+        try:
+            mic_stream.open()
+            mic_stream.stream.start()
+        except Exception as exc:  # noqa: BLE001
+            # Микрофон отключили, пока поток ждал: открываем заново.
+            log.info("Microphone stream lost, reopening: %s", exc)
+            mic_stream.reopen()
+            refreshed = time.time()
+            mic_stream.stream.start()
         log.info("Recording...")
         set_state("recording")
         chime("Speech On.wav")
         early = EarlyLanguage(chunks)
         while commands.get() != "stop":
             pass
-        stream.stop()
-        stream.close()
+        try:
+            mic_stream.stream.stop()
+        except Exception as exc:  # noqa: BLE001
+            log.info("Microphone stop failed: %s", exc)
+            mic_stream.close()
         early.stop()
         duration = time.time() - start
         if held["cancelled"] or duration < MIN_SECONDS or not chunks:
