@@ -404,6 +404,41 @@ def set_hidden(titles):
         f.write("".join(t + "\n" for t in sorted(titles)))
 
 
+# Порядок мест и сцен в селекторе, который Мастер выставил перетаскиванием.
+# Медиатека отдаёт их по алфавиту, и «End Campaign» шёл первым. Чего в
+# списке нет (новые сцены), встаёт после известных, в прежнем порядке.
+ORDER = HIDDEN.with_name("scene-order.json")
+
+
+def scene_order():
+    try:
+        data = json.loads(ORDER.read_text(encoding="utf-8"))
+        return list(data.get("places", [])), list(data.get("scenes", []))
+    except (OSError, ValueError):
+        return [], []
+
+
+def set_scene_order(places=None, titles=None):
+    old_places, old_titles = scene_order()
+    data = {"places": old_places if places is None else places,
+            "scenes": old_titles if titles is None else titles}
+    ORDER.parent.mkdir(parents=True, exist_ok=True)
+    with open(ORDER, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+def ordered(items):
+    places, titles = scene_order()
+    p_rank = {p: i for i, p in enumerate(places)}
+    t_rank = {t: i for i, t in enumerate(titles)}
+    first = {}
+    for n, s in enumerate(items):
+        first.setdefault(s["place"], n)
+    big = len(items) + len(places) + len(titles)
+    return sorted(items, key=lambda s: (p_rank.get(s["place"], big + first[s["place"]]),
+                                        t_rank.get(s["title"], big), items.index(s)))
+
+
 def scenes():
     """Плейлисты медиатеки, чьё имя начинается с точки: их выгружает
     Import-WinampPlaylist из файлов кампании. Остальные - личные Мастера,
@@ -441,7 +476,7 @@ def scenes_state():
             continue
         out.append({k: s[k] for k in ("title", "place", "scene", "seconds")}
                    | {"songs": len(s["tracks"])})
-    return {"scenes": out, "current": current, "hidden": skipped}
+    return {"scenes": ordered(out), "current": current, "hidden": skipped}
 
 
 def drop_from_scene(queue, index, path):
@@ -652,7 +687,9 @@ PAGE = r"""<!doctype html>
               text-align:center; font-size:12px; font-weight:normal; border-radius:50%;
               background:#2a2d37; border:1px solid #4a4f5e; color:#b0b4c0; display:none; }
  #scenes.editing .scene b.x { display:block; }
- #scenes.editing .scene { cursor:default; border-style:dashed; }
+ #scenes.editing .scene { cursor:grab; border-style:dashed; }
+ #scenes.editing .place h3 { cursor:grab; }
+ #scenes .dragging { opacity:.4; }
  #scenes.editing .scene:hover { border-color:#333744; }
  .scene b.x:hover { color:#fff; background:#a8434c; border-color:#e06c75; }
  .unhide { padding:10px 8px 0; font-size:12px; color:#7f8596; text-align:right; }
@@ -1020,12 +1057,27 @@ async function pollScenes(){
     scenes = d.scenes || []; sceneNow = d.current || ""; scenesHidden = d.hidden || 0;
     document.getElementById("scenename").textContent =
       sceneNow ? sceneNow.slice(1) : (scenes.length ? "свой список" : "нет плейлистов");
-    if (sceneBox.classList.contains("open") && !document.activeElement.matches("select.npc")) drawScenes();
+    if (sceneBox.classList.contains("open") && !dragging && !mouseHeld &&
+        !document.activeElement.matches("select.npc")) drawScenes();
   } catch(e){ }
 }
 
+// Опрос сцен каждые 3 с перерисовывал список целиком, даже когда ничего не
+// поменялось. Если перерисовка попадала между нажатием и отпусканием мыши,
+// браузер клик не засчитывал: нажали на старую кнопку, отпустили на новой.
+// Теперь список пересобирается, только если поменялось содержимое, и
+// никогда при зажатой кнопке мыши.
+let drawnStamp = "", mouseHeld = false;
+document.addEventListener("pointerdown", () => { mouseHeld = true; }, true);
+document.addEventListener("pointerup", () => { mouseHeld = false; }, true);
+document.addEventListener("pointercancel", () => { mouseHeld = false; }, true);
+window.addEventListener("blur", () => { mouseHeld = false; });
+
 function drawScenes(){
   const q = sceneFind.value.trim().toLowerCase();
+  const stamp = JSON.stringify([scenes, sceneNow, scenesHidden, editing, q]);
+  if (stamp === drawnStamp && document.getElementById("scenelist").childElementCount) return;
+  drawnStamp = stamp;
   const groups = new Map();
   for (const s of scenes){
     if (q && !s.title.toLowerCase().includes(q)) continue;
@@ -1045,7 +1097,7 @@ function drawScenes(){
     // В режиме правки НПС раскрыты в обычные кнопки: у пункта списка
     // крестика не поставить.
     const npc = editing ? [] : list.filter(s => s.scene.startsWith("НПС - "));
-    html += `<div class="place"><h3>${esc(place)}</h3>`;
+    html += `<div class="place" data-place="${esc(place)}"><h3>${esc(place)}</h3>`;
     for (const s of list) if (!npc.includes(s)) html += chip(s, s.scene || place);
     if (npc.length){
       // Тема НПС играет одна, поэтому все НПС локации - один выпадающий
@@ -1078,6 +1130,52 @@ function drawScenes(){
   const un = document.getElementById("unhide");
   if (un) un.onclick = e => { e.stopPropagation(); hideScene(""); };
   list.querySelectorAll("select.npc").forEach(el => el.onchange = () => el.value && pickScene(el.value));
+  if (editing && !q) wireDrag(list);
+}
+
+// В режиме правки кнопки сцен перетаскиваются внутри своего места, а места -
+// за заголовок. Порядок уходит на сервер и переживает перезапуск.
+let dragging = null;
+function wireDrag(list){
+  list.querySelectorAll(".scene").forEach(el => el.draggable = true);
+  list.querySelectorAll(".place h3").forEach(h => { h.draggable = true; h.title = "перетащи, чтобы переставить место"; });
+  list.ondragstart = e => {
+    const chip = e.target.closest(".scene"), head = e.target.closest(".place h3");
+    dragging = chip || (head && head.parentElement);
+    if (!dragging) return;
+    dragging.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "");
+  };
+  list.ondragover = e => {
+    if (!dragging) return;
+    if (dragging.matches(".scene")){
+      const over = e.target.closest(".scene");
+      if (!over || over === dragging || over.parentElement !== dragging.parentElement) return;
+      e.preventDefault();
+      const r = over.getBoundingClientRect();
+      over.parentElement.insertBefore(dragging, e.clientX < r.left + r.width / 2 ? over : over.nextSibling);
+    } else {
+      const over = e.target.closest(".place");
+      if (!over || over === dragging) return;
+      e.preventDefault();
+      const r = over.getBoundingClientRect();
+      list.insertBefore(dragging, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+    }
+  };
+  list.ondrop = e => e.preventDefault();
+  list.ondragend = () => {
+    if (!dragging) return;
+    dragging.classList.remove("dragging");
+    dragging = null;
+    const places = [...list.querySelectorAll(".place")].map(p => p.dataset.place);
+    const titles = [...list.querySelectorAll(".scene")].map(s => s.dataset.t);
+    const rank = new Map(titles.map((t, i) => [t, i]));
+    const prank = new Map(places.map((p, i) => [p, i]));
+    scenes.sort((a, b) => (prank.get(a.place) ?? 1e9) - (prank.get(b.place) ?? 1e9) ||
+                          (rank.get(a.title) ?? 1e9) - (rank.get(b.title) ?? 1e9));
+    fetch("/api/order", {method: "POST", body: JSON.stringify({places, scenes: scenes.map(s => s.title)})});
+  };
 }
 
 // Пустой title возвращает все скрытые.
@@ -1219,6 +1317,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.path.startswith("/api/launch"):
                 launch_winamp()
+                self._send(200, json.dumps({"ok": True}))
+                return
+            if self.path.startswith("/api/order"):
+                set_scene_order(payload.get("places"), payload.get("scenes"))
                 self._send(200, json.dumps({"ok": True}))
                 return
             if self.path.startswith("/api/hide"):
