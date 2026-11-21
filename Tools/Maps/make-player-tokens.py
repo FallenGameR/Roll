@@ -73,8 +73,9 @@ def crop_head(img, cx, cy, r):
     return img.crop(tuple(int(round(v)) for v in box))
 
 
-def make_token(name, cfg):
-    src = Image.open(os.path.join(SRC, cfg.get("src", name) + ".png")).convert("RGB")
+def render_token(src, cfg):
+    """Кругляшок SIZE x SIZE из портрета src (RGB) по вырезу cfg: cx, cy, r и ring.
+    Его же зовёт make-npc-tokens.py, чтобы токены NPC были такими же."""
     big = SIZE * SS
     head = crop_head(src, cfg["cx"], cfg["cy"], cfg["r"]).resize((big, big), Image.LANCZOS)
 
@@ -95,7 +96,12 @@ def make_token(name, cfg):
     d.ellipse((inner, inner, big - 1 - inner, big - 1 - inner),
               outline="#1e1e1e", width=thin)
 
-    token = token.resize((SIZE, SIZE), Image.LANCZOS)
+    return token.resize((SIZE, SIZE), Image.LANCZOS)
+
+
+def make_token(name, cfg):
+    src = Image.open(os.path.join(SRC, cfg.get("src", name) + ".png")).convert("RGB")
+    token = render_token(src, cfg)
     os.makedirs(DST, exist_ok=True)
     token.save(os.path.join(DST, name + " токен.png"))
 
