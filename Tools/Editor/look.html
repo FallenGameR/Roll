@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Сравнение картинок</title>
+<style>
+  :root { --status-bar-color: var(--background-color-default, #ffffff);
+          --frame: #d8d4cc; --like: #6f8f68; --like-bg: rgba(111,143,104,.16);
+          --dislike: #b07a6e; --dislike-bg: rgba(176,122,110,.16); --muted: var(--text-color-muted, #666); }
+  :root[data-color-mode="dark"], :root[data-theme-tone="dark"] {
+          --frame: #3b3631; --like: #9fbd97; --like-bg: rgba(159,189,151,.14);
+          --dislike: #d4a397; --dislike-bg: rgba(212,163,151,.14); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-color-mode]):not([data-theme-tone]) {
+          --frame: #3b3631; --like: #9fbd97; --like-bg: rgba(159,189,151,.14);
+          --dislike: #d4a397; --dislike-bg: rgba(212,163,151,.14); }
+  }
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column;
+         background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
+         font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 14px; line-height: 20px; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--frame); display: flex; align-items: center;
+           gap: 14px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; flex: 1 1 auto; overflow-wrap: anywhere; }
+  .seg { display: inline-flex; border: 1px solid var(--frame); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12px; }
+  .seg button.on { background: var(--frame); }
+  .count { color: var(--muted); font-size: 13px; }
+  button { font: inherit; padding: 4px 12px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--frame); background: transparent; color: inherit; }
+  button:disabled, textarea:disabled, input:disabled { opacity: .55; cursor: default; }
+  button.send { border-color: var(--like); color: var(--like); }
+  main { flex: 1; overflow: auto; padding: 8px 16px 32px; }
+  section { margin: 14px 0 22px; }
+  h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+  .note { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  textarea { font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; resize: vertical;
+             min-height: 30px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--frame);
+             background: transparent; color: inherit; }
+  .grid { display: grid; gap: 14px; margin-top: 8px; }
+  .grid.c1 { grid-template-columns: 1fr; }
+  .grid.c2 { grid-template-columns: 1fr 1fr; }
+  .card { border: 2px solid var(--frame); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .card.like { border-color: var(--like); }
+  .card.dislike { border-color: var(--dislike); }
+  .pic { cursor: zoom-in; display: flex; align-items: center; justify-content: center; max-height: 78vh; }
+  .pic img { max-width: 100%; max-height: 78vh; display: block; }
+  .bg-check .pic, .bg-check #full { background-color: #fff;
+       background-image: conic-gradient(#cfcfcf 25%, #fff 0 50%, #cfcfcf 0 75%, #fff 0);
+       background-size: 24px 24px; }
+  .bg-dark .pic, .bg-dark #full { background: #141414; }
+  .bg-light .pic, .bg-light #full { background: #f4f1ea; }
+  .bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; }
+  .bar .name { color: var(--muted); font-size: 12px; margin-right: auto; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+  .rate.like.on { background: var(--like-bg); border-color: var(--like); color: var(--like); }
+  .rate.dislike.on { background: var(--dislike-bg); border-color: var(--dislike); color: var(--dislike); }
+  .card textarea { border: 0; border-top: 1px solid var(--frame); border-radius: 0; min-height: 34px; }
+  #full { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; }
+  #full.open { display: flex; }
+  #full .stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; cursor: zoom-out; }
+  #full img { max-width: 100%; max-height: 100%; }
+  #full .bar { background: rgba(20,20,20,.88); color: #eee; padding: 8px 12px; }
+  #full .bar .name { color: #bbb; font-size: 13px; }
+  #full button { color: #eee; border-color: #555; }
+  #full textarea { background: rgba(255,255,255,.06); color: #eee; border-color: #555; width: 40%; min-height: 30px; }
+  .idle { color: var(--muted); padding: 20px 16px; }
+  .sent { color: var(--like); font-size: 13px; }
+</style></head>
+<body class="bg-check">
+<div id="root" style="display:contents"><div class="idle">Загружаю…</div></div>
+<div id="full">
+  <div class="stage"><img id="fullimg" alt=""></div>
+  <div class="bar">
+    <button id="fprev" title="предыдущая (←)">←</button>
+    <button id="fnext" title="следующая (→)">→</button>
+    <span class="name" id="fname"></span>
+    <button class="rate like" data-r="like">нравится</button>
+    <button class="rate dislike" data-r="dislike">не нравится</button>
+    <textarea id="fcomment" placeholder="комментарий"></textarea>
+    <button id="fclose" title="закрыть (Esc)">✕</button>
+  </div>
+</div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ID = new URLSearchParams(location.search).get("i") || "default";
+const q = (p) => `/look${p}${p.includes("?") ? "&" : "?"}i=${encodeURIComponent(ID)}`;
+const api = (p, body) => fetch(q(p), {method: "POST", body: JSON.stringify(body ?? {})}).then((r) => r.json());
+
+let cur = null, shown = "", flat = [], fullAt = -1;
+let cols = localStorage.getItem("look.cols") || (innerWidth >= 1100 ? "2" : "1");
+let bg = localStorage.getItem("look.bg") || "check";
+document.body.className = "bg-" + bg;
+
+async function poll(){
+  try {
+    const s = await api("/state");
+    const stamp = JSON.stringify([s.rid, s.state]);
+    if (stamp !== shown){ shown = stamp; cur = s; render(); }
+  } catch(e){ }
+}
+
+function src(im){ return q(`/img?g=${im.gi}&n=${im.ii}`) + "&v=" + cur.rid; }
+
+function card(im, locked){
+  const dis = locked ? "disabled" : "";
+  return `<div class="card ${im.rating || ""}" data-k="${im.gi}.${im.ii}">` +
+    `<div class="pic"><img loading="lazy" src="${src(im)}" alt="${esc(im.name)}"></div>` +
+    `<div class="bar"><span class="name" title="${esc(im.name)}">${esc(im.name)}</span>` +
+    `<button class="rate like${im.rating === "like" ? " on" : ""}" data-r="like" ${dis}>нравится</button>` +
+    `<button class="rate dislike${im.rating === "dislike" ? " on" : ""}" data-r="dislike" ${dis}>не нравится</button></div>` +
+    `<textarea class="cmt" placeholder="комментарий к картинке" ${dis}>${esc(im.comment || "")}</textarea></div>`;
+}
+
+function count(){
+  const rated = flat.filter((im) => im.rating).length;
+  const el = document.getElementById("count");
+  if (el) el.textContent = `оценено ${rated} из ${flat.length}`;
+}
+
+function render(){
+  const root = document.getElementById("root");
+  if (!cur || !cur.rid){ root.innerHTML = `<div class="idle">Круга пока нет: сессия покажет здесь варианты картинок.</div>`; return; }
+  const locked = cur.state !== "ждёт";
+  flat = cur.groups.flatMap((g) => g.images);
+  root.innerHTML = `<header><h1>${esc(cur.title)}</h1>` +
+    `<span class="seg" id="cols"><button data-v="1" class="${cols === "1" ? "on" : ""}">1 в ряд</button><button data-v="2" class="${cols === "2" ? "on" : ""}">2 в ряд</button></span>` +
+    `<span class="seg" id="bgs"><button data-v="check" class="${bg === "check" ? "on" : ""}">шахматка</button><button data-v="dark" class="${bg === "dark" ? "on" : ""}">тёмный</button><button data-v="light" class="${bg === "light" ? "on" : ""}">светлый</button></span>` +
+    `<span class="count" id="count"></span>` +
+    (locked ? `<span class="sent">отправлено</span>` : `<button class="send" id="send">Отправить</button>`) +
+    `</header><main>` +
+    cur.groups.map((g, gi) => `<section data-g="${gi}"><h2>${esc(g.name)}</h2>` +
+      (g.note ? `<div class="note">${esc(g.note)}</div>` : "") +
+      `<textarea class="gcmt" placeholder="общий комментарий к группе" ${locked ? "disabled" : ""}>${esc(g.comment)}</textarea>` +
+      `<div class="grid c${cols}">${g.images.map((im) => card(im, locked)).join("")}</div></section>`).join("") +
+    `</main>`;
+  count();
+  wire(locked);
+}
+
+const timers = {};
+function later(key, fn){ clearTimeout(timers[key]); timers[key] = setTimeout(fn, 300); }
+function imOf(k){ const [g, n] = k.split(".").map(Number); return cur.groups[g].images[n]; }
+
+function rate(im, r){
+  im.rating = im.rating === r ? null : r;
+  api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, rating: im.rating});
+  const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
+  if (c){
+    c.classList.remove("like", "dislike"); if (im.rating) c.classList.add(im.rating);
+    c.querySelectorAll(".rate").forEach((b) => b.classList.toggle("on", b.dataset.r === im.rating));
+  }
+  count();
+  if (fullAt >= 0) showFull(fullAt);
+}
+
+function comment(im, text){
+  im.comment = text;
+  later(`${im.gi}.${im.ii}`, () => api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, comment: text}));
+}
+
+function wire(locked){
+  document.querySelectorAll("#cols button").forEach((b) => b.onclick = () => {
+    cols = b.dataset.v; localStorage.setItem("look.cols", cols); render(); });
+  document.querySelectorAll("#bgs button").forEach((b) => b.onclick = () => {
+    bg = b.dataset.v; localStorage.setItem("look.bg", bg); document.body.className = "bg-" + bg; render(); });
+  document.querySelectorAll(".pic").forEach((p) => p.onclick = () =>
+    openFull(flat.indexOf(imOf(p.closest(".card").dataset.k))));
+  if (locked) return;
+  document.querySelectorAll(".card .rate").forEach((b) => b.onclick = () => rate(imOf(b.closest(".card").dataset.k), b.dataset.r));
+  document.querySelectorAll(".card .cmt").forEach((t) => t.oninput = () => comment(imOf(t.closest(".card").dataset.k), t.value));
+  document.querySelectorAll(".gcmt").forEach((t) => t.oninput = () => {
+    const gi = +t.closest("section").dataset.g;
+    cur.groups[gi].comment = t.value;
+    later("g" + gi, () => api("/mark", {rid: cur.rid, g: gi, comment: t.value}));
+  });
+  document.getElementById("send").onclick = async (e) => {
+    const left = flat.filter((im) => !im.rating).length;
+    if (left && !confirm(`Без оценки картинок: ${left}. Всё равно отправить?`)) return;
+    e.target.disabled = true; e.target.textContent = "Отправляю…";
+    await new Promise((r) => setTimeout(r, 400));
+    await api("/submit", {rid: cur.rid});
+    shown = ""; poll();
+  };
+}
+
+// Полный экран: картинка на всё окно, стрелки листают по всем группам.
+const full = document.getElementById("full"), fullImg = document.getElementById("fullimg"), fcomment = document.getElementById("fcomment");
+function showFull(i){
+  fullAt = (i + flat.length) % flat.length;
+  const im = flat[fullAt], g = cur.groups[im.gi];
+  fullImg.src = src(im);
+  document.getElementById("fname").textContent = `${g.name} · ${im.name} (${fullAt + 1}/${flat.length})`;
+  full.querySelectorAll(".rate").forEach((b) => { b.classList.toggle("on", b.dataset.r === im.rating); b.disabled = cur.state !== "ждёт"; });
+  if (document.activeElement !== fcomment) fcomment.value = im.comment || "";
+  fcomment.disabled = cur.state !== "ждёт";
+}
+function openFull(i){ full.classList.add("open"); showFull(i); }
+function closeFull(){ full.classList.remove("open"); fullAt = -1; render(); }
+document.getElementById("fprev").onclick = () => showFull(fullAt - 1);
+document.getElementById("fnext").onclick = () => showFull(fullAt + 1);
+document.getElementById("fclose").onclick = closeFull;
+full.querySelector(".stage").onclick = closeFull;
+full.querySelectorAll(".rate").forEach((b) => b.onclick = () => rate(flat[fullAt], b.dataset.r));
+fcomment.oninput = () => comment(flat[fullAt], fcomment.value);
+document.addEventListener("keydown", (e) => {
+  if (fullAt < 0 || document.activeElement === fcomment) { if (e.key === "Escape" && fullAt >= 0) closeFull(); return; }
+  if (e.key === "Escape") closeFull();
+  if (e.key === "ArrowLeft") showFull(fullAt - 1);
+  if (e.key === "ArrowRight") showFull(fullAt + 1);
+});
+
+setInterval(poll, 1500); poll();
+</script>
+</body></html>

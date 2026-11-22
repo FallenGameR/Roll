@@ -7,7 +7,7 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createCanvas, CanvasError, joinSession } from "@github/copilot-sdk/extension";
 
@@ -18,13 +18,16 @@ process.on("unhandledRejection", (e) => process.stderr.write(`unhandled: ${e?.st
 // соседние файлы ищутся от настоящего пути этого файла.
 const HERE = dirname(realpathSync(fileURLToPath(import.meta.url)));
 
-// Два canvas на одном сервере: «Правка текста» (logic.mjs, editor.html) в
-// корне и «Выбор вариантов» (pick.mjs, pick.html) под /pick. Модули
-// перечитываются при каждом изменении файла.
+// Три canvas на одном сервере: «Правка текста» (logic.mjs, editor.html) в
+// корне, «Выбор вариантов» (pick.mjs, pick.html) под /pick и «Сравнение
+// картинок» (look.mjs, look.html) под /look. Модули перечитываются при
+// каждом изменении файла.
 const PARTS = {
     editor: { logic: join(HERE, "logic.mjs"), page: join(HERE, "editor.html") },
     pick: { logic: join(HERE, "pick.mjs"), page: join(HERE, "pick.html") },
+    look: { logic: join(HERE, "look.mjs"), page: join(HERE, "look.html") },
 };
+const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 
 const loaded = {};
 async function logic(part = "editor") {
@@ -53,17 +56,27 @@ async function ensureServer() {
     if (server) return server.url;
     const http = createServer(async (req, res) => {
         try {
-            const part = req.url.startsWith("/pick") ? "pick" : "editor";
-            const path = part === "pick" ? req.url.slice(5) || "/" : req.url;
+            const url = new URL(req.url, "http://x");
+            const part = ["pick", "look"].find((p) => url.pathname.startsWith("/" + p)) ?? "editor";
+            const path = part === "editor" ? url.pathname : url.pathname.slice(part.length + 1) || "/";
             const route = (await logic(part)).routes[path];
             if (!route) {
                 res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
                 res.end(await readFile(PARTS[part].page, "utf8"));
                 return;
             }
-            const body = JSON.stringify(await route({ session, body: await readBody(req) }));
+            const query = Object.fromEntries(url.searchParams);
+            const out = await route({ session, body: await readBody(req), query });
+            // Маршрут может отдать файл картинки: { file: путь }.
+            if (out && out.file) {
+                const type = IMAGE_TYPES[extname(out.file).toLowerCase()];
+                if (!type) throw new Error("не картинка");
+                res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
+                res.end(await readFile(out.file));
+                return;
+            }
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
-            res.end(body);
+            res.end(JSON.stringify(out));
         } catch (e) {
             res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
             res.end(JSON.stringify({ error: e.message }));
@@ -82,7 +95,7 @@ const action = (name, description, inputSchema, part = "editor") => ({
         const handler = (await logic(part)).actions[name];
         if (!handler) throw CanvasError.noHandler();
         try {
-            return await handler({ session, input: ctx.input ?? {} });
+            return await handler({ session, input: ctx.input ?? {}, instanceId: ctx.instanceId });
         } catch (e) {
             throw new CanvasError(e.code ?? "failed", e.message);
         }
@@ -158,6 +171,41 @@ session = await joinSession({
                 action("status", "Текущая порция: решения по строкам, сколько решено, отправлена ли.", undefined, "pick"),
             ],
             open: async () => ({ title: "Выбор вариантов", url: (await ensureServer()) + "pick" }),
+        }),
+        createCanvas({
+            id: "roll-look",
+            displayName: "Сравнение картинок",
+            description: "Крупное сравнение вариантов картинок по группам: на каждую «нравится» / «не нравится» и комментарий, общий комментарий на группу; по кнопке «Отправить» оценки уходят в сессию.",
+            actions: [
+                action("propose",
+                    "Показать круг. groups - группы вариантов, по группе на кадр: { name, images: [полные пути PNG/JPG/WebP], note? }. " +
+                    "Состояние своё у каждого instanceId: новый круг - новый instanceId или новый propose в тот же. " +
+                    "По кнопке «Отправить» оценки придут в сессию сообщением [Сравнение картинок] и запишутся в TSV рядом с состоянием сессии.",
+                    {
+                        type: "object",
+                        properties: {
+                            title: { type: "string" },
+                            groups: {
+                                type: "array", minItems: 1,
+                                items: {
+                                    type: "object",
+                                    properties: {
+                                        name: { type: "string" },
+                                        images: { type: "array", minItems: 1, items: { type: "string" } },
+                                        note: { type: "string" },
+                                    },
+                                    required: ["name", "images"],
+                                },
+                            },
+                        },
+                        required: ["title", "groups"],
+                    }, "look"),
+                action("status", "Оценки этого круга: по картинке оценка и комментарий, по группе комментарий; отправлен ли.", undefined, "look"),
+            ],
+            open: async (ctx) => ({
+                title: "Сравнение картинок",
+                url: (await ensureServer()) + "look?i=" + encodeURIComponent(ctx.instanceId),
+            }),
         }),
     ],
 });
