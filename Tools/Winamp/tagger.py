@@ -479,6 +479,58 @@ def scenes_state():
     return {"scenes": ordered(out), "current": current, "hidden": skipped}
 
 
+# Приглушение музыки под гонг таймера. Живёт на сервере, а не в странице:
+# браузер урезает таймеры фоновой вкладке (до раза в минуту), и плавный
+# возврат громкости застревал на полпути. Состояние общее на все удары:
+# второй гонг, пока музыка ещё приглушена, не принимает приглушённую
+# громкость за исходную, а продлевает приглушение. Если громкость поменяли
+# руками (она уже не та, что поставили мы), возврат её не трогает.
+DUCK_LEVEL, DUCK_HOLD, DUCK_STEPS, DUCK_STEP_PAUSE = 0.3, 4.5, 10, 0.12
+_duck = {"base": None, "set": None, "token": 0}
+_duck_lock = threading.Lock()
+
+
+def _ours(level):
+    return level is not None and _duck["set"] is not None and abs(level - _duck["set"]) <= 2
+
+
+def duck_music():
+    """Приглушает Winamp и через DUCK_HOLD плавно возвращает. Отдаёт исходную громкость."""
+    with _duck_lock:
+        cur = winamp_now.volume()
+        if cur is None:
+            return None
+        if _duck["base"] is None or not _ours(cur):
+            _duck["base"] = cur
+        base = _duck["base"]
+        low = round(base * DUCK_LEVEL)
+        winamp_now.volume(low)
+        _duck["set"] = low
+        _duck["token"] += 1
+        token = _duck["token"]
+
+    def restore():
+        import time
+        time.sleep(DUCK_HOLD)
+        for i in range(1, DUCK_STEPS + 1):
+            with _duck_lock:
+                if token != _duck["token"]:
+                    return  # новый удар продлил приглушение
+                if not _ours(winamp_now.volume()):
+                    _duck.update(base=None, set=None)
+                    return  # громкость поменяли руками
+                level = round(low + (base - low) * i / DUCK_STEPS)
+                winamp_now.volume(level)
+                _duck["set"] = level
+            time.sleep(DUCK_STEP_PAUSE)
+        with _duck_lock:
+            if token == _duck["token"]:
+                _duck.update(base=None, set=None)
+
+    threading.Thread(target=restore, daemon=True).start()
+    return base
+
+
 def drop_from_scene(queue, index, path):
     """Вычёркивает трек из сцены медиатеки, если очередь плеера - эта сцена.
 
@@ -570,6 +622,17 @@ PAGE = r"""<!doctype html>
  button.mode:hover { background:#2e3240; border-color:#4a5164; }
  button.mode svg { width:17px; height:16px; display:block; }
  button.mode.on { background:#2b4a63; border-color:#43708f; color:#eaf4fb; }
+ button.timer { font-size:13px; font-variant-numeric:tabular-nums; width:auto; min-width:40px; padding:0 6px; }
+ button.timer.on { background:#5a3a1e; border-color:#a8703a; color:#ffe3c4; }
+ button.timer.ring { background:#8a2a2a; border-color:#e06c75; color:#fff; }
+ .scenebar { position:relative; }
+ #timermenu { position:absolute; right:0; bottom:calc(100% + 6px); z-index:22; display:none;
+              flex-direction:column; gap:4px; padding:6px; background:#1d1f26;
+              border:1px solid #333744; border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.5); }
+ #timermenu.open { display:flex; }
+ #timermenu button { font:inherit; font-size:14px; padding:5px 14px; border-radius:6px; cursor:pointer;
+                     border:1px solid #333744; background:#1b1d24; color:#dcdde1; text-align:left; }
+ #timermenu button:hover { border-color:#5aa7d8; }
  .stars { display:flex; gap:2px; margin-left:4px; }
  .stars span { font-size:20px; line-height:1; cursor:pointer; color:#3c414f; padding:0 1px; }
  .stars span.on { color:#e3b341; }
@@ -724,6 +787,8 @@ PAGE = r"""<!doctype html>
       <button id="scenebtn" title="Сменить плейлист (клавиша P)"><small>плейлист</small><span id="scenename">…</span></button>
       <button class="mode" data-mode="shuffle" title="случайный порядок"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h2.5c3 0 4 7 7 7H14M2 11.5h2.5c1.2 0 2-1 2.6-2.3M9 6.8c.6-1.3 1.4-2.3 2.6-2.3H14M12 2.5l2 2-2 2M12 9.5l2 2-2 2"/></svg></button>
       <button class="mode" data-mode="repeat"  title="повтор списка по кругу"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V6a2 2 0 0 1 2-2h8M11 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3M5 14l-2-2 2-2"/></svg></button>
+      <button class="mode timer" id="timer" title="таймер: от 30 с до 5 мин, в конце гонг; 0 с - просто послушать звук; клик во время отсчёта - отмена"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="5.5"/><path d="M8 9V6M6.5 1.5h3"/></svg></button>
+      <div id="timermenu"><button data-s="0">0 с</button><button data-s="30">30 с</button><button data-s="60">1 мин</button><button data-s="120">2 мин</button><button data-s="180">3 мин</button><button data-s="300">5 мин</button></div>
     </div>
     <div id="scenes">
       <input id="scenefind" placeholder="Локация или сцена… Enter - включить, Esc - закрыть" autocomplete="off">
@@ -894,6 +959,172 @@ document.querySelectorAll("button[data-mode]").forEach(b => {
     fetch("/api/mode", {method:"POST", body: JSON.stringify({[b.dataset.mode]: on})});
   };
 });
+// Таймер: кнопка открывает меню сроков (0 с - послушать звук, 30 с, 1, 2,
+// 3, 5 мин), во время отсчёта
+// показывает остаток, в конце бьёт гонг: запись из sounds\gong.mp3, а если
+// она не загрузилась - синтез (два удара барабана и гонг). Звук играет сама
+// страница (Web Audio), а не Winamp: музыку он не прерывает и от громкости
+// плеера не зависит. Клик во время отсчёта - отмена.
+const timerBtn = document.getElementById("timer"), timerIcon = timerBtn.innerHTML;
+const timerMenu = document.getElementById("timermenu");
+let timerEnd = 0, timerTick = null, audioCtx = null;
+
+function noise(ctx, seconds){
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * seconds), ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  return src;
+}
+
+// Удар в большой барабан: низкий тон, падающий по высоте, и глухой шлепок
+// по коже - шум через низкочастотный фильтр.
+function drum(ctx, out, t){
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.setValueAtTime(110, t);
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.25);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.9, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+  o.connect(g).connect(out); o.start(t); o.stop(t + 1);
+  const n = noise(ctx, 0.3), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+  f.type = "lowpass"; f.frequency.value = 700;
+  ng.gain.setValueAtTime(0.5, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  n.connect(f).connect(ng).connect(out); n.start(t);
+}
+
+// Гонг: набор негармоничных обертонов, как у металлической тарелки. Пары
+// чуть расстроенных тонов дают биения - тот самый «гул»; высокие обертона
+// разгораются не сразу, а через долю секунды, и гаснут раньше низких.
+function gong(ctx, out, t){
+  const base = 98;
+  const parts = [[1, .5, 7], [1.48, .32, 6], [2.09, .26, 5], [2.56, .2, 4.5],
+                 [3.08, .14, 4], [3.6, .1, 3.2], [4.23, .08, 2.6], [5.1, .06, 2], [6.3, .04, 1.6]];
+  parts.forEach(([ratio, amp, decay], k) => {
+    for (const detune of [0, 0.6 + k * 0.15]){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(base * ratio * 1.015 + detune, t);
+      o.frequency.exponentialRampToValueAtTime(base * ratio + detune, t + 1.2);
+      const bloom = k > 3 ? 0.25 : 0.01;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(amp / 2, t + bloom);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + decay);
+      o.connect(g).connect(out); o.start(t); o.stop(t + decay + 0.1);
+    }
+  });
+  // удар колотушкой
+  const n = noise(ctx, 0.5), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+  f.type = "bandpass"; f.frequency.value = 1800; f.Q.value = 0.7;
+  ng.gain.setValueAtTime(0.35, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  n.connect(f).connect(ng).connect(out); n.start(t);
+}
+
+function gongSound(ctx, dest = ctx.destination){
+  const t0 = ctx.currentTime + 0.05;
+  // Компрессор держит сумму обертонов без хрипа, а громкость - на уровне
+  // музыки, а не пожарной сирены.
+  const comp = ctx.createDynamicsCompressor(), master = ctx.createGain();
+  comp.threshold.value = -14; comp.ratio.value = 6;
+  master.gain.value = 0.8;
+  comp.connect(master).connect(dest);
+  drum(ctx, comp, t0);
+  drum(ctx, comp, t0 + 0.32);
+  gong(ctx, comp, t0 + 0.75);
+}
+
+// Запись большого китайского гонга, CC0 (Wikimedia Commons, «240382
+// the-very-real-horst chinese-gong-finish-session»): последний удар с
+// хвостом, 8 с. Грузится один раз; не загрузился - звучит синтез выше.
+let gongBuffer = null;
+async function loadGong(ctx){
+  if (gongBuffer) return gongBuffer;
+  const data = await (await fetch("/sounds/gong.mp3", {cache: "no-cache"})).arrayBuffer();
+  return gongBuffer = await ctx.decodeAudioData(data);
+}
+
+// Гонг звучит от громкости Winamp (0-255; её меняют ползунок и колесо мыши
+// на этой странице), но вдвое громче, +6 дБ: он должен перекрыть музыку.
+// Перед ударом громкость спрашивается у плеера заново: сразу после загрузки
+// страницы ползунок ещё стоит на значении по умолчанию 255.
+const GONG_BOOST = 2;
+async function winampVolume(){
+  try {
+    const v = (await (await fetch("/api/now")).json()).volume;
+    if (v != null) return v;
+  } catch(e){ }
+  return volKnown ? Number(volBox.value) : null;
+}
+
+function winampGain(ctx, v){
+  const g = ctx.createGain();
+  g.gain.value = v == null ? 0.5 : Math.min(1, v / 255 * GONG_BOOST);
+  g.connect(ctx.destination);
+  return g;
+}
+
+// На боевом треке гонг тонет в барабанах и басе, как его ни поднимай: его
+// гул лежит в тех же частотах. Поэтому на время гонга сервер приглушает
+// Winamp и сам плавно возвращает громкость (duck_music в tagger.py). Сервер
+// отвечает исходной громкостью - от неё и считается громкость гонга.
+async function duck(){
+  try {
+    const v = (await (await fetch("/api/duck", {method: "POST", body: "{}"})).json()).volume;
+    if (v != null) return v;
+  } catch(e){ }
+  return winampVolume();
+}
+
+async function beep(){
+  audioCtx = audioCtx || new AudioContext();
+  const ctx = audioCtx, v = await duck(), out = winampGain(ctx, v);
+  loadGong(ctx).then(buf => {
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    src.connect(out); src.start();
+  }).catch(() => gongSound(ctx, out));
+}
+
+function stopTimer(){
+  clearInterval(timerTick); timerTick = null; timerEnd = 0;
+  timerBtn.classList.remove("on", "ring"); timerBtn.innerHTML = timerIcon;
+}
+
+function startTimer(seconds){
+  timerMenu.classList.remove("open");
+  // Контекст звука создаётся по клику: без жеста пользователя браузер
+  // не даст ему играть, когда таймер дойдёт до нуля.
+  audioCtx = audioCtx || new AudioContext();
+  audioCtx.resume();
+  loadGong(audioCtx).catch(() => {});
+  timerEnd = Date.now() + seconds * 1000;
+  timerBtn.classList.remove("ring");
+  timerBtn.classList.add("on");
+  const show = () => {
+    const left = Math.ceil((timerEnd - Date.now()) / 1000);
+    if (left > 0){
+      timerBtn.textContent = left >= 60 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : left;
+      return;
+    }
+    clearInterval(timerTick); timerTick = null;
+    beep();
+    timerBtn.classList.replace("on", "ring"); timerBtn.textContent = "0";
+    setTimeout(() => { if (!timerTick) stopTimer(); }, 4000);
+  };
+  clearInterval(timerTick);
+  show(); timerTick = setInterval(show, 200);
+}
+
+timerBtn.onclick = e => {
+  e.stopPropagation();
+  if (timerTick){ stopTimer(); return; }
+  timerMenu.classList.toggle("open");
+};
+timerMenu.querySelectorAll("button").forEach(b => b.onclick = e => {
+  e.stopPropagation(); startTimer(Number(b.dataset.s));
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("#timermenu")) timerMenu.classList.remove("open");
+});
+
 function showModes(d){
   if (Date.now() - modeTouched < 1000) return;
   document.querySelectorAll("button[data-mode]").forEach(b =>
@@ -1265,6 +1496,23 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._send(404, "нет иконки")
             return
+        if self.path.startswith("/sounds/"):
+            # Звуки страницы (гонг таймера) лежат рядом, в sounds\.
+            name = os.path.basename(self.path.split("?")[0])
+            path = Path(__file__).with_name("sounds") / name
+            if name.endswith(".mp3") and path.is_file():
+                data = path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Length", str(len(data)))
+                # Без долгого кэша: иначе после замены файла браузер сутки
+                # играл бы старый звук.
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self._send(404, "нет звука")
+            return
         if self.path.startswith("/api/now"):
             self._send(200, json.dumps(track_state(), ensure_ascii=False))
             return
@@ -1291,6 +1539,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.startswith("/api/mode"):
                 ok = winamp_now.set_mode(payload.get("shuffle"), payload.get("repeat"))
                 self._send(200, json.dumps({"ok": ok}))
+                return
+            if self.path.startswith("/api/duck"):
+                self._send(200, json.dumps({"ok": True, "volume": duck_music()}))
                 return
             if self.path.startswith("/api/volume"):
                 level = winamp_now.volume(payload["level"])
