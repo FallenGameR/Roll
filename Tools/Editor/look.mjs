@@ -74,8 +74,8 @@ async function submit(session, id, body) {
             g.images.forEach((path, ii) => {
                 total++;
                 const m = state.marks[`${gi}.${ii}`] ?? {};
-                const rating = RATING[m.rating] ?? "без оценки";
-                if (m.rating) rated++;
+                const rating = RATING[m.rating] ?? "—";
+                if (m.rating === "like") rated++;
                 rows.push([g.name, basename(path), rating, m.comment, path].map(cell).join("\t"));
                 msg.push(`- ${basename(path)} → ${rating}` + (cell(m.comment) ? `: ${cell(m.comment)}` : ""));
             });
@@ -88,7 +88,7 @@ async function submit(session, id, body) {
         state.status = "отправлен";
         state.sentAt = new Date().toISOString();
         await save(session, id, state);
-        const head = `[Сравнение картинок] Мастер отправил «${state.title}»: оценено ${rated} из ${total}` +
+        const head = `[Сравнение картинок] Мастер отправил «${state.title}»: нравится ${rated} из ${total}` +
             (state.out ? `, файл ${state.out}` : "") + ".";
         try { session?.send({ prompt: [head, ...msg].join("\n") }).catch(() => {}); } catch { }
         return view(state);
@@ -123,7 +123,7 @@ export const actions = {
             groups: v.groups.map((g) => ({
                 name: g.name, comment: g.comment,
                 images: g.images.map((im) => ({ file: im.name, path: state.groups[im.gi].images[im.ii],
-                                                rating: RATING[im.rating] ?? "без оценки", comment: im.comment ?? "" })),
+                                                rating: RATING[im.rating] ?? "—", comment: im.comment ?? "" })),
             })),
         };
     },
