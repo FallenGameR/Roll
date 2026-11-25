@@ -63,7 +63,7 @@ function serial(fn) {
     return run;
 }
 
-const RATING = { like: "нравится" };
+const RATING = { like: "нравится", hide: "скрыта" };
 
 // Слот картинки: { path, label }. path может указывать на файл, которого
 // ещё нет (кадр рисуется), или быть null (слот без имени, его заполнит add).
@@ -150,7 +150,7 @@ async function submit(session, id, body) {
             : null;
         const rows = ["group\tfile\trating\tcomment\tpath"];
         const msg = [];
-        let rated = 0, total = 0;
+        let rated = 0, hidden = 0, total = 0;
         for (const g of view(state).groups) {
             msg.push(`## ${g.name}` + (cell(g.comment) ? `: ${cell(g.comment)}` : ""));
             rows.push([g.name, "", "группа", g.comment, ""].map(cell).join("\t"));
@@ -159,6 +159,7 @@ async function submit(session, id, body) {
                 total++;
                 const rating = RATING[im.rating] ?? "—";
                 if (im.rating === "like") rated++;
+                if (im.rating === "hide") hidden++;
                 rows.push([g.name, im.name, rating, im.comment, im.path].map(cell).join("\t"));
                 msg.push(`- ${im.name} → ${rating}` + (cell(im.comment) ? `: ${cell(im.comment)}` : ""));
             }
@@ -172,6 +173,7 @@ async function submit(session, id, body) {
         state.sentAt = new Date().toISOString();
         await save(session, id, state);
         const head = `[Сравнение картинок] Мастер отправил «${state.title}»: нравится ${rated} из ${total}` +
+            (hidden ? `, скрыто ${hidden}` : "") +
             (state.out ? `, файл ${state.out}` : "") + ".";
         try { session?.send({ prompt: [head, ...msg].join("\n") }).catch(() => {}); } catch { }
         return view(state);
@@ -263,7 +265,7 @@ export const routes = {
         if (!path || !existsSync(path)) throw fail("no_image", "нет такой картинки");
         return { file: path };
     },
-    // { rid, g, n?, rating?: "like"|null, comment? }; без n - комментарий группы.
+    // { rid, g, n?, rating?: "like"|"hide"|null, comment? }; без n - комментарий группы.
     "/mark": async ({ session, query, body }) => serial(async () => {
         const state = await load(session, query.i);
         if (!state || state.rid !== body.rid || state.status !== "ждёт") return { ok: false };
@@ -276,7 +278,7 @@ export const routes = {
             if (!path) return { ok: false };
             const key = markKey(path);
             const m = { ...(state.marks[key] ?? {}) };
-            if (body.rating !== undefined) m.rating = body.rating || undefined;
+            if (body.rating !== undefined) m.rating = RATING[body.rating] ? body.rating : undefined;
             if (body.comment !== undefined) m.comment = String(body.comment);
             state.marks[key] = m;
         }

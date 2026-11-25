@@ -51,10 +51,18 @@
   .card > .bar { border-bottom: 1px solid var(--edge); }
   .bar .name { font-size: 14px; font-weight: 600; margin-right: auto; overflow-wrap: anywhere; line-height: 18px; }
   .bar .name small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .aux { display: inline-flex; align-items: center; gap: 8px; padding-right: 12px; border-right: 1px solid var(--edge); }
+  .aux:empty { display: none; }
   .bgsw { width: 16px; height: 16px; padding: 0; border-radius: 4px; border: 1px solid var(--edge);
-          margin-right: 6px; opacity: .55; transition: opacity .15s; }
+          opacity: .55; transition: opacity .15s; }
   .bgsw:hover { opacity: 1; }
-  .bgsw + .pick { padding-left: 12px; border-left: 1px solid var(--edge); border-radius: 0; }
+  .hide { border: 0; padding: 2px; line-height: 0; color: var(--muted); opacity: .55; transition: opacity .15s; }
+  .hide:hover:not(:disabled) { opacity: 1; }
+  .hide svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+  .card.hidden { box-shadow: none; opacity: .6; }
+  .card.hidden > .bar { border-bottom: 0; padding: 3px 8px; }
+  .card.hidden .name { font-weight: 400; color: var(--muted); text-decoration: line-through; }
+  .unhide { font-size: 12px; padding: 1px 10px; }
   .pick { border: 0; padding: 2px; line-height: 0; color: var(--muted); }
   .pick svg { width: 26px; height: 26px; transition: transform .12s; }
   .pick .ring { fill: none; stroke: currentColor; stroke-width: 1.4; opacity: .7; }
@@ -147,6 +155,7 @@ function nextBg(im){
 // Отметка «нравится» - кружок с галочкой: пустой контур или заливка
 // шалфейным, тем же цветом, что полоса прогресса.
 const PICK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"/><path class="tick" d="M7.2 12.4l3.2 3.2 6.4-6.8"/></svg>`;
+const EYE_OFF = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.3-6 9-6c1.6 0 3 .5 4.2 1.1M21 12s-3.3 6-9 6c-1.6 0-3-.5-4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M4 20L20 4"/></svg>`;
 function pick(on, dis){
   return `<button class="rate pick${on ? " on" : ""}" data-r="like" title="${on ? "нравится (снять)" : "нравится"}" aria-pressed="${on}" ${dis}>${PICK}</button>`;
 }
@@ -167,7 +176,7 @@ async function poll(){
     const stamp = JSON.stringify([s.rid, s.state, (s.groups || []).map((g) => g.images.map((im) => [im.path, im.label]))]);
     if (stamp !== structure){ structure = stamp; cur = s; render(); return; }
     const was = cur; cur = s;
-    flat = cur.groups.flatMap((g) => g.images).filter((im) => im.ready);
+    flat = visible();
     for (const g of cur.groups) for (const im of g.images){
       const old = was.groups[im.gi]?.images[im.ii];
       if (!old || old.ready !== im.ready || old.v !== im.v) patchCard(im);
@@ -194,12 +203,18 @@ function card(im, locked){
   }
   const dis = locked ? "disabled" : "";
   const text = drafts[im.path] ?? im.comment ?? "";
-  // Оценка одна, «нравится»: повторный клик её снимает. Подпись, фон и
-  // галочка над картинкой, комментарий под ней.
+  // Скрытая картинка сворачивается в полоску с подписью и «показать».
+  if (im.rating === "hide")
+    return `<div class="card hidden" data-k="${key}">` +
+      `<div class="bar"><span class="name">${caption(im)}</span>` +
+      `<button class="rate unhide" data-r="hide" ${dis}>показать</button></div></div>`;
+  // Оценка одна: «нравится» или «скрыта», повторный клик снимает. Подпись,
+  // фон, «скрыть» и галочка над картинкой, комментарий под ней.
   const on = im.rating === "like";
   return `<div class="card${on ? " like" : ""}" data-k="${key}">` +
     `<div class="bar"><span class="name">${caption(im)}</span>` +
-    bgButton(im) + pick(on, dis) + `</div>` +
+    `<span class="aux">${bgButton(im)}<button class="rate hide" data-r="hide" title="скрыть: лишняя" ${dis}>${EYE_OFF}</button></span>` +
+    pick(on, dis) + `</div>` +
     `<div class="pic" style="${bgStyle(im)}"><img loading="lazy" src="${src(im)}" alt="${esc(im.label || im.name)}"></div>` +
     `<textarea class="cmt" rows="1" placeholder="комментарий" ${dis}>${esc(text)}</textarea></div>`;
 }
@@ -248,7 +263,7 @@ function render(){
   const root = document.getElementById("root");
   if (!cur || !cur.rid){ root.innerHTML = `<div class="idle">Круга пока нет: сессия покажет здесь варианты картинок.</div>`; return; }
   const locked = cur.state !== "ждёт";
-  flat = cur.groups.flatMap((g) => g.images).filter((im) => im.ready);
+  flat = visible();
   const focus = document.activeElement?.matches?.("textarea") ? document.activeElement : null;
   const fkey = focus && (focus.closest(".card")?.dataset.k ?? "g" + focus.closest("section")?.dataset.g);
   const caret = focus?.selectionStart;
@@ -280,10 +295,16 @@ function later(key, fn){ clearTimeout(timers[key]); timers[key] = setTimeout(fn,
 function imOf(k){ const [g, n] = k.split(".").map(Number); return cur.groups[g].images[n]; }
 
 function rate(im, r){
+  const was = im.rating;
   im.rating = im.rating === r ? null : r;
   api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, rating: im.rating});
   const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
-  if (c){
+  if (c && (was === "hide" || im.rating === "hide")){
+    // Свернуть или развернуть: карточка собирается заново.
+    c.outerHTML = card(im, cur.state !== "ждёт");
+    flat = visible();
+    wireCards();
+  } else if (c){
     c.classList.toggle("like", im.rating === "like");
     c.querySelectorAll(".rate").forEach((b) => {
       const on = b.dataset.r === im.rating;
@@ -291,6 +312,8 @@ function rate(im, r){
   }
   if (fullAt >= 0) showFull(fullAt);
 }
+// Листать на полном экране можно готовые и не скрытые картинки.
+const visible = () => cur.groups.flatMap((g) => g.images).filter((im) => im.ready && im.rating !== "hide");
 
 function comment(im, text){
   im.comment = text; drafts[im.path] = text;
