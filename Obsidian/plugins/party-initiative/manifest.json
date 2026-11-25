@@ -1,0 +1,9 @@
+{
+  "id": "party-initiative",
+  "name": "Инициатива отряда",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Ввод инициативы всему отряду одной строкой в Initiative Tracker.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": true
+}

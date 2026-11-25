@@ -1,0 +1,12 @@
+/* zoom-map: окантовка текстовых подписей на картах.
+   Плагин рисует подписи как SVG <text>, а у SVG-текста нет background.
+   Повторяем картографический стиль самих карт: тёмный текст (цвет задаётся
+   в markers.json под доминирующий цвет местности) + белая окантовка. */
+
+.zm-text__svg text {
+  paint-order: stroke fill;
+  stroke: var(--zm-text-halo, #fff);
+  stroke-width: 0.24em;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}

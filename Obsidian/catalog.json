@@ -1,0 +1,38 @@
+{
+  "kits": {
+    "base": "Любой волт: свойства свёрнуты и не мешают, callout'ы в рамке.",
+    "dnd": "Волт с Initiative Tracker и Fantasy Statblocks, разложенный как Рудники Фанделвера.",
+    "phandelver": "Завязано на страницы и папки кампании Рудники Фанделвера."
+  },
+  "plugins": [
+    { "id": "fold-properties-always", "kit": "base", "needs": [] },
+    { "id": "statblock-note-link", "kit": "dnd", "needs": ["obsidian-5e-statblocks"] },
+    { "id": "combatant-pane-reuse", "kit": "dnd", "needs": ["initiative-tracker"] },
+    { "id": "campaign-statblocks", "kit": "dnd", "needs": ["obsidian-5e-statblocks"] },
+    { "id": "party-initiative", "kit": "dnd", "needs": ["initiative-tracker"] },
+    { "id": "timeline-links", "kit": "dnd", "needs": ["simple-timeline"] },
+    { "id": "battlemap-links", "kit": "phandelver", "needs": ["initiative-tracker", "obsidian-excalidraw-plugin"] },
+    { "id": "chase-tracker", "kit": "phandelver", "needs": ["initiative-tracker"] },
+    { "id": "xge-difficulty", "kit": "phandelver", "needs": ["initiative-tracker"] }
+  ],
+  "snippets": [
+    { "name": "hide-all-properties-tab", "kit": "base", "needs": [],
+      "description": "Прячет вкладку All properties, которую Обсидиан пересоздаёт при каждом запуске." },
+    { "name": "hide-properties-in-popover", "kit": "base", "needs": [],
+      "description": "Убирает пустой блок свойств во всплывающем предпросмотре; пара к fold-properties-always." },
+    { "name": "fix-callout-boxes", "kit": "base", "needs": [],
+      "description": "Постоянная рамка, фон и шапка у стандартных callout'ов, в том числе в Live Preview." },
+    { "name": "fix-statblock-bold-contrast", "kit": "dnd", "needs": ["obsidian-5e-statblocks"],
+      "description": "Жирный текст в статблоке читается на светлом фоне при тёмной теме." },
+    { "name": "statblock-live-preview", "kit": "dnd", "needs": ["obsidian-5e-statblocks"],
+      "description": "Статблок в редакторе тех же цветов, что в панели трекера." },
+    { "name": "tracker-panel-background", "kit": "dnd", "needs": ["initiative-tracker"],
+      "description": "Панели Initiative Tracker и Fantasy Statblocks на фоне темы, а не светло-серые." },
+    { "name": "zoommap-wide-only", "kit": "dnd", "needs": ["zoom-map"],
+      "description": "Интерактивная карта на всю ширину панели, текст остаётся читаемой ширины." },
+    { "name": "zoommap-text-plate", "kit": "dnd", "needs": ["zoom-map"],
+      "description": "Белая окантовка подписей на картах zoom-map." },
+    { "name": "hide-properties-in-panel", "kit": "phandelver", "needs": [],
+      "description": "Прячет служебные свойства кампании (cssclasses, statblock, tags, obsidianUIMode) в панели File properties." }
+  ]
+}

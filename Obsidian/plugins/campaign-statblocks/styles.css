@@ -1,0 +1,141 @@
+/* Slot circles (U+25EF, circled digits U+2460-2468) in
+   statblocks of player cards stand upright inside italic trait names. The
+   symbol font has no italic face, so the browser fakes a slant and the circle
+   turns into an ellipse. Both faces below map italic to the upright glyph,
+   only for these code points; letters keep the real italic of the text font.
+   Filled digits U+2776-277E are left alone: they are upright anyway, and in
+   Segoe UI Symbol they lose their number. */
+/* Sizes: filled digits come from Segoe UI and are drawn much larger than the
+   Segoe UI Symbol glyphs. size-adjust brings the empty circle and the empty
+   digits up to the height of the filled ones, so a slot tracker, a use circle
+   and a slot cost read as one set. */
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: normal;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+25EF;
+  size-adjust: 115%;
+}
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: normal;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+2460-2468;
+  size-adjust: 158%;
+}
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: italic;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+25EF;
+  size-adjust: 115%;
+}
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: italic;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+2460-2468;
+  size-adjust: 158%;
+}
+.statblock {
+  --statblock-content-font: "Statblock Slots", "Noto Sans", "Myriad Pro", Calibri,
+    Helvetica, Arial, sans-serif;
+}
+/* Player sheet PDFs (Adventure/Players/Characters/Sheets): slot circles carry checkbox
+   form fields. Obsidian's PDF viewer paints every form field with a grey-blue
+   tint; on the parchment page it hides the circle, so the tint is removed and
+   only the PDF's own appearance (a red cross when ticked) is shown. */
+.annotationLayer {
+  --annotation-unfocused-field-background: none;
+  --input-unfocused-border-color: transparent;
+}
+.annotationLayer .buttonWidgetAnnotation.checkBox input,
+.annotationLayer .buttonWidgetAnnotation.checkBox input:hover,
+.annotationLayer .buttonWidgetAnnotation.checkBox input:focus {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+/* Dice buttons inside statblocks: die icon first, the rolled number after it,
+   in plain italic instead of bold. The square brackets around the button come
+   from the "Монстр" statblock layout's dice parser. */
+.statblock .dice-roller {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.15em;
+}
+.statblock .dice-roller-result {
+  font-weight: normal !important;
+  font-style: italic !important;
+}
+
+/* Combatant pane of Initiative Tracker: the statblock follows the pane width
+   instead of a fixed 400px column, so the pane can be made narrow. Long rows
+   (stats table, Challenge/Proficiency) wrap instead of being clipped. */
+.creature-view-container .statblock-content-container {
+  --statblock-column-width: 100% !important;
+}
+.creature-view-container .statblock,
+.creature-view-container .statblock .bar,
+.creature-view-container .statblock .statblock-content-container,
+.creature-view-container .statblock .statblock-content {
+  width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+.creature-view-container .statblock .statblock-content > .column {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+.creature-view-container .statblock .statblock-table {
+  flex-wrap: wrap;
+}
+.creature-view-container .statblock .statblock-item-inline {
+  flex-wrap: wrap;
+}
+
+/* Spent marks: circled times U+2297 for a ring, circled slash U+2298 for a
+   slot digit. Same face and size as the empty ring so a row keeps its width. */
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: normal;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+2297-2298;
+  size-adjust: 115%;
+}
+@font-face {
+  font-family: "Statblock Slots";
+  font-style: italic;
+  src: local("Segoe UI Symbol"), local("Segoe UI"), local("Noto Sans Symbols");
+  unicode-range: U+2297-2298;
+  size-adjust: 115%;
+}
+/* Clickable trackers (main.js wraps every ring and slot digit in .cs-tick). */
+.statblock .cs-tick {
+  cursor: pointer;
+  border-radius: 50%;
+}
+.statblock .cs-tick:hover {
+  background: var(--background-modifier-hover);
+}
+/* Spent mark: a slash through the glyph. main.js measures the glyph ink with
+   canvas.measureText and sets --cs-x, --cs-y and --cs-w, so the slash goes
+   through the centre of the drawing, not of the box it overflows. */
+.statblock .cs-tick.is-spent {
+  display: inline-block;
+  line-height: 1;
+  position: relative;
+  opacity: 0.55;
+}
+.statblock .cs-tick.is-spent::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--cs-w, 0.85em);
+  border-top: 1.5px solid currentColor;
+  transform: translate(calc(-50% + var(--cs-x, 0px)), calc(-50% + var(--cs-y, 0px))) rotate(-45deg);
+}

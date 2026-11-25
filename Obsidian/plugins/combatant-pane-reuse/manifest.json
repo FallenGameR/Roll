@@ -1,0 +1,9 @@
+{
+  "id": "combatant-pane-reuse",
+  "name": "Одна панель Combatant",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Заставляет Initiative Tracker открывать статблок в уже существующей панели Combatant, а не создавать новую после перезапуска Обсидиана.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

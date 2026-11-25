@@ -33,9 +33,14 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
 
 Темы сейчас такие: `Music`, `Playlists`, `Winamp`, `Audio`, `Dictation`,
 `Dice`, `Images`, `Maps`, `Players`, `Vault`, `Panel`, `Editor`, `Remarkable`,
-`Pdf`. Новую тему
+`Pdf`, `Obsidian`. Новую тему
 заводят, только если код не ложится ни в одну из них; одна и та же тема
 в `Public`, `Private` и `Tools` называется одинаково.
+
+Папка `Obsidian` в корне модуля - не код модуля, а наши плагины и
+сниппеты Обсидиана, источник правды для всех волтов. Ставит их
+`Install-ObsidianKit`, каталог - `Get-ObsidianKit` и
+`Obsidian\README.md`. Как писать свой плагин - скилл `obsidian-plugins`.
 
 `Tools\Players` держит раздатки к повышению уровня: `levelup_lib.py` -
 общая вёрстка, `levelup-N.py` - тексты под уровень N. Старые уровни не

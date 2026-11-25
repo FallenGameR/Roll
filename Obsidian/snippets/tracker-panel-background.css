@@ -1,0 +1,18 @@
+/* Подложка панелей Initiative Tracker под цвет остальных инструментов.
+
+   Панели трекера рисуются на светло-сером фоне, а календарь, поиск и прочие
+   вкладки сайдбара берут фон темы. Ровняем их по теме: переменная
+   --background-secondary и есть фон боковой панели.
+
+   Если оттенок окажется не тот, поменяй переменную на --background-primary
+   или --background-primary-alt. */
+
+.workspace-leaf-content[data-type="initiative-tracker-view"],
+.workspace-leaf-content[data-type="initiative-tracker-creature-view"],
+.workspace-leaf-content[data-type="fantasy-statblocks-creature-pane"] {
+  background-color: var(--background-secondary);
+}
+
+.workspace-leaf-content[data-type="initiative-tracker-creature-view"] .creature-view-container {
+  background-color: transparent;
+}

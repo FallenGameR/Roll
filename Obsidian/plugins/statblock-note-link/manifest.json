@@ -1,0 +1,9 @@
+{
+  "id": "statblock-note-link",
+  "name": "Ссылка из статблока на заметку",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Дописывает в макет Fantasy Statblocks ссылку на заметку монстра, чтобы из панели Initiative Tracker можно было открыть исходный файл.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

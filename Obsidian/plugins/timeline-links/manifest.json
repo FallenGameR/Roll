@@ -1,0 +1,9 @@
+{
+  "id": "timeline-links",
+  "name": "Ссылки из таймлайна",
+  "version": "1.0.0",
+  "minAppVersion": "1.9.0",
+  "description": "Клик по карточке simple-timeline в виде Bases открывает заметку: сам плагин вешает на неё только предпросмотр.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

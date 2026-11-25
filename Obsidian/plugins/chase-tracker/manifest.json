@@ -1,0 +1,9 @@
+{
+  "id": "chase-tracker",
+  "name": "Погоня",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Код-блок chase: шкала дистанции, раунды, пара догоняющих и сцены из колоды по правилам погони кампании.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

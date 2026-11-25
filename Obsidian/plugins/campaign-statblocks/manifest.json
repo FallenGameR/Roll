@@ -1,0 +1,9 @@
+{
+  "id": "campaign-statblocks",
+  "name": "Статблоки кампании",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Держит макеты Fantasy Statblocks кампании (Монстр, Лист игрока) и их стили в своей папке, чтобы обновление чужих плагинов их не сносило.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

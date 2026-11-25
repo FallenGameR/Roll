@@ -45,7 +45,7 @@
   /* Фон под картинкой - инлайн-стилем у самой .pic, а не классом на body:
      хост переписывает классы body своими. Переключатель есть только у
      картинок с прозрачностью. */
-  .pic { cursor: zoom-in; display: flex; align-items: center; justify-content: center; max-height: 78vh; }
+  .pic { cursor: pointer; display: flex; align-items: center; justify-content: center; max-height: 78vh; }
   .pic img { max-width: 100%; max-height: 78vh; display: block; }
   .bar { display: flex; gap: 8px; align-items: center; padding: 6px 8px; }
   .card > .bar { border-bottom: 1px solid var(--edge); }
@@ -73,15 +73,26 @@
   .pick.on .tick { stroke: #fff; opacity: 1; }
   .card textarea { border: 0; border-top: 1px solid var(--edge); border-radius: 0; padding: 7px 10px; }
   .card textarea:focus { background: rgba(127,127,127,.06); }
-  #full { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; background: #141414; }
+  #full { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; background: #141414; color: #eee; }
   #full.open { display: flex; }
-  #full .stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; cursor: zoom-out; }
-  #full img { max-width: 100%; max-height: 100%; }
-  #full .bar { background: rgba(20,20,20,.88); color: #eee; padding: 8px 12px; }
+  #full .stage { flex: 1; display: flex; gap: 6px; min-height: 0; }
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pane .fpic { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .pane .fpic img { max-width: 100%; max-height: 100%; }
+  .pane .bar { background: rgba(20,20,20,.88); padding: 6px 12px; }
+  .pane textarea { flex: 0 1 40%; }
+  #full > .bar { background: #0d0d0d; color: #eee; padding: 8px 12px; border-top: 1px solid #333; }
   #full .bar .name { color: #eee; }
   #full .pick:not(.on) { color: #bbb; }
+  #full .aux { border-right-color: #444; }
   #full button { color: #eee; border-color: #555; }
-  #full textarea { background: rgba(255,255,255,.06); color: #eee; border-color: #555; width: 40%; }
+  #full .seg { border-color: #444; }
+  #full .seg button.on { background: #444; }
+  #full textarea { background: rgba(255,255,255,.06); color: #eee; border-color: #555; }
+  .fcount { color: #999; font-size: 13px; margin-right: auto; font-variant-numeric: tabular-nums; }
+  .full { border: 0; padding: 2px; line-height: 0; color: var(--muted); opacity: .55; transition: opacity .15s; }
+  .full:hover { opacity: 1; }
+  .full svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .idle { color: var(--muted); padding: 20px 16px; }
   .sent { color: var(--like); font-size: 13px; }
   .prog { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
@@ -102,14 +113,12 @@
 <body>
 <div id="root" style="display:contents"><div class="idle">Загружаю…</div></div>
 <div id="full">
-  <div class="stage"><img id="fullimg" alt=""></div>
+  <div class="stage" id="fstage"></div>
   <div class="bar">
-    <button id="fprev" title="предыдущая (←)">←</button>
-    <button id="fnext" title="следующая (→)">→</button>
-    <span class="name" id="fname"></span>
-    <span id="fbgs" style="display:contents"></span>
-    <button class="rate pick" data-r="like" title="нравится"></button>
-    <textarea id="fcomment" rows="1" placeholder="комментарий"></textarea>
+    <button id="fprev" title="назад (←)">←</button>
+    <button id="fnext" title="вперёд (→)">→</button>
+    <span class="seg" id="fmode"><button data-v="1" title="одна"></button><button data-v="2" title="две рядом"></button></span>
+    <span class="fcount" id="fcount"></span>
     <button id="fclose" title="закрыть (Esc)">✕</button>
   </div>
 </div>
@@ -150,12 +159,15 @@ function nextBg(im){
     c.querySelector(".bgsw").outerHTML = bgButton(im);
     c.querySelector(".bgsw").onclick = () => nextBg(im);
   }
-  if (fullAt >= 0) showFull(fullAt);
+  if (fullAt >= 0) syncFull();
 }
 // Отметка «нравится» - кружок с галочкой: пустой контур или заливка
 // шалфейным, тем же цветом, что полоса прогресса.
 const PICK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"/><path class="tick" d="M7.2 12.4l3.2 3.2 6.4-6.8"/></svg>`;
 const EYE_OFF = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.3-6 9-6c1.6 0 3 .5 4.2 1.1M21 12s-3.3 6-9 6c-1.6 0-3-.5-4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M4 20L20 4"/></svg>`;
+const EXPAND = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`;
+const ICON_ONE = `<svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" rx="1.5"/></svg>`;
+const ICON_TWO = `<svg viewBox="0 0 18 14"><rect x="0.5" y="2" width="8" height="10" rx="1.5"/><rect x="9.5" y="2" width="8" height="10" rx="1.5"/></svg>`;
 function pick(on, dis){
   return `<button class="rate pick${on ? " on" : ""}" data-r="like" title="${on ? "нравится (снять)" : "нравится"}" aria-pressed="${on}" ${dis}>${PICK}</button>`;
 }
@@ -214,7 +226,7 @@ function card(im, locked){
   // Подпись, фон, «скрыть» и галочка над картинкой, комментарий под ней.
   return `<div class="card${on ? " like" : ""}" data-k="${key}">` +
     `<div class="bar"><span class="name">${caption(im)}</span>` +
-    `<span class="aux">${bgButton(im)}<button class="hide" title="скрыть, чтобы не занимала место" ${dis}>${EYE_OFF}</button></span>` +
+    `<span class="aux">${bgButton(im)}<button class="full" title="на весь экран">${EXPAND}</button><button class="hide" title="скрыть, чтобы не занимала место" ${dis}>${EYE_OFF}</button></span>` +
     pick(on, dis) + `</div>` +
     `<div class="pic" style="${bgStyle(im)}"><img loading="lazy" src="${src(im)}" alt="${esc(im.label || im.name)}"></div>` +
     `<textarea class="cmt" rows="1" placeholder="комментарий" ${dis}>${esc(text)}</textarea></div>`;
@@ -272,8 +284,8 @@ function render(){
   // групп больше одной.
   const many = cur.groups.length > 1;
   root.innerHTML = `<header><div class="top"><h1>${esc(cur.title)}</h1>` +
-    `<span class="seg" id="cols"><button data-v="1" title="по одной" class="${cols === "1" ? "on" : ""}"><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" rx="1.5"/></svg></button>` +
-    `<button data-v="2" title="по две" class="${cols === "2" ? "on" : ""}"><svg viewBox="0 0 18 14"><rect x="0.5" y="2" width="8" height="10" rx="1.5"/><rect x="9.5" y="2" width="8" height="10" rx="1.5"/></svg></button></span>` +
+    `<span class="seg" id="cols"><button data-v="1" title="по одной" class="${cols === "1" ? "on" : ""}">${ICON_ONE}</button>` +
+    `<button data-v="2" title="по две" class="${cols === "2" ? "on" : ""}">${ICON_TWO}</button></span>` +
     (locked ? `<span class="sent">передано</span>` : `<button class="send" id="send" title="передать отметки и комментарии в сессию">Готово</button>`) +
     `</div><div class="prog" id="progress" hidden><div class="track"><div class="fill"></div><div class="run"></div></div><span class="ptext"></span></div>` +
     `</header><main>` +
@@ -305,7 +317,7 @@ function rate(im, r){
       const on = b.dataset.r === im.rating;
       b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   }
-  if (fullAt >= 0) showFull(fullAt);
+  if (fullAt >= 0) syncFull();
 }
 // Свернуть или развернуть: карточка собирается заново.
 function setHidden(im, hidden){
@@ -326,10 +338,12 @@ function comment(im, text){
 // навешивает их заново, не трогая остальную страницу.
 function wireCards(){
   const locked = cur.state !== "ждёт";
-  document.querySelectorAll(".pic").forEach((p) => p.onclick = () =>
-    openFull(flat.indexOf(imOf(p.closest(".card").dataset.k))));
+  // Щелчок по картинке ставит или снимает «нравится»; полный экран - кнопкой.
+  document.querySelectorAll(".card .full").forEach((b) => b.onclick = () =>
+    openFull(flat.indexOf(imOf(b.closest(".card").dataset.k))));
   document.querySelectorAll(".card .bgsw").forEach((b) => b.onclick = () => nextBg(imOf(b.closest(".card").dataset.k)));
   if (locked) return;
+  document.querySelectorAll(".pic").forEach((p) => p.onclick = () => rate(imOf(p.closest(".card").dataset.k), "like"));
   document.querySelectorAll(".card .rate").forEach((b) => b.onclick = () => rate(imOf(b.closest(".card").dataset.k), b.dataset.r));
   document.querySelectorAll(".card .hide").forEach((b) => b.onclick = () => setHidden(imOf(b.closest(".card").dataset.k), true));
   document.querySelectorAll(".card .unhide").forEach((b) => b.onclick = () => setHidden(imOf(b.closest(".card").dataset.k), false));
@@ -356,35 +370,68 @@ function wire(locked){
   };
 }
 
-// Полный экран: картинка на всё окно, стрелки листают по всем группам.
-const full = document.getElementById("full"), fullImg = document.getElementById("fullimg"), fcomment = document.getElementById("fcomment");
-function showFull(i){
-  fullAt = (i + flat.length) % flat.length;
-  const im = flat[fullAt], g = cur.groups[im.gi];
-  fullImg.src = src(im);
-  full.style.cssText = bgStyle(im);
-  const fbgs = document.getElementById("fbgs");
-  fbgs.innerHTML = bgButton(im);
-  fbgs.querySelectorAll("button").forEach((b) => b.onclick = () => nextBg(im));
-  const fname = document.getElementById("fname");
-  fname.innerHTML = (cur.groups.length > 1 ? esc(g.name) + " · " : "") + caption(im) + `<small>${fullAt + 1}/${flat.length}</small>`;
-  full.querySelectorAll(".rate").forEach((b) => {
-    const on = b.dataset.r === im.rating;
-    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); b.disabled = cur.state !== "ждёт"; });
-  if (document.activeElement !== fcomment) fcomment.value = im.comment || "";
-  fcomment.disabled = cur.state !== "ждёт";
+// Полный экран: одна картинка или две рядом. Стрелки сдвигают на одну,
+// так что в режиме «две» можно вести сравнение цепочкой: 1-2, 2-3, ...
+// Щелчок по картинке ставит или снимает «нравится», у каждой своя подпись,
+// фон и комментарий.
+const full = document.getElementById("full"), fstage = document.getElementById("fstage");
+let fullMode = localStorage.getItem("look.fullmode") || "1";
+const fullItems = () => {
+  const n = fullMode === "2" && flat.length > 1 ? 2 : 1;
+  return Array.from({length: n}, (_, j) => flat[(fullAt + j) % flat.length]);
+};
+function paneHtml(im){
+  const locked = cur.state !== "ждёт", dis = locked ? "disabled" : "";
+  const g = cur.groups[im.gi], on = im.rating === "like";
+  return `<div class="pane" data-k="${im.gi}.${im.ii}">` +
+    `<div class="fpic" style="${bgStyle(im)}"><img src="${src(im)}" alt="${esc(im.label || im.name)}"></div>` +
+    `<div class="bar"><span class="name">${cur.groups.length > 1 ? esc(g.name) + " · " : ""}${caption(im)}</span>` +
+    `<span class="aux">${bgButton(im)}</span>${pick(on, dis)}` +
+    `<textarea class="fcmt" rows="1" placeholder="комментарий" ${dis}>${esc(drafts[im.path] ?? im.comment ?? "")}</textarea></div></div>`;
 }
-function openFull(i){ full.classList.add("open"); showFull(i); }
+function showFull(i){
+  if (!flat.length){ closeFull(); return; }
+  fullAt = (i + flat.length) % flat.length;
+  const items = fullItems();
+  fstage.innerHTML = items.map(paneHtml).join("");
+  document.getElementById("fcount").textContent =
+    items.length > 1 ? `${fullAt + 1}–${(fullAt + 1) % flat.length + 1} из ${flat.length}` : `${fullAt + 1} из ${flat.length}`;
+  document.querySelectorAll("#fmode button").forEach((b) => b.classList.toggle("on", b.dataset.v === fullMode));
+  const locked = cur.state !== "ждёт";
+  fstage.querySelectorAll(".pane").forEach((p) => {
+    const im = () => imOf(p.dataset.k);
+    p.querySelector(".bgsw")?.addEventListener("click", () => nextBg(im()));
+    if (locked) return;
+    p.querySelector(".fpic").onclick = () => rate(im(), "like");
+    p.querySelector(".pick").onclick = () => rate(im(), "like");
+    p.querySelector(".fcmt").oninput = (e) => comment(im(), e.target.value);
+  });
+}
+// Отметка и фон меняются на месте, чтобы не сбить набор комментария.
+function syncFull(){
+  fstage.querySelectorAll(".pane").forEach((p) => {
+    const im = imOf(p.dataset.k), on = im.rating === "like";
+    const b = p.querySelector(".pick");
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
+    p.querySelector(".fpic").style.cssText = bgStyle(im);
+    const aux = p.querySelector(".aux");
+    aux.innerHTML = bgButton(im);
+    aux.querySelector(".bgsw")?.addEventListener("click", () => nextBg(imOf(p.dataset.k)));
+  });
+}
+function openFull(i){ if (i < 0) return; full.classList.add("open"); showFull(i); }
 function closeFull(){ full.classList.remove("open"); fullAt = -1; render(); }
+document.querySelectorAll("#fmode button").forEach((b) => {
+  b.innerHTML = b.dataset.v === "2" ? ICON_TWO : ICON_ONE;
+  b.onclick = () => { fullMode = b.dataset.v; localStorage.setItem("look.fullmode", fullMode); showFull(fullAt); };
+});
 document.getElementById("fprev").onclick = () => showFull(fullAt - 1);
 document.getElementById("fnext").onclick = () => showFull(fullAt + 1);
 document.getElementById("fclose").onclick = closeFull;
-full.querySelector(".stage").onclick = closeFull;
-full.querySelectorAll(".rate").forEach((b) => { b.innerHTML = PICK; b.onclick = () => rate(flat[fullAt], b.dataset.r); });
-fcomment.oninput = () => comment(flat[fullAt], fcomment.value);
 document.addEventListener("keydown", (e) => {
-  if (fullAt < 0 || document.activeElement === fcomment) { if (e.key === "Escape" && fullAt >= 0) closeFull(); return; }
-  if (e.key === "Escape") closeFull();
+  if (fullAt < 0) return;
+  if (e.key === "Escape"){ closeFull(); return; }
+  if (document.activeElement?.matches?.("textarea")) return;
   if (e.key === "ArrowLeft") showFull(fullAt - 1);
   if (e.key === "ArrowRight") showFull(fullAt + 1);
 });

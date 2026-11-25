@@ -1,0 +1,328 @@
+/* ============================================================================
+   Единая «коробка» для callout-блоков.
+
+   Что делает: каждому callout'у даёт полную рамку, скруглённые углы,
+   подкрашенный фон и подкрашенную шапку — и, главное, показывает рамку
+   ПОСТОЯННО в Live Preview, а не только при наведении мыши.
+
+   Раньше правило было прописано только для readaloud и note; теперь
+   работает для всех стандартных типов. Цвет у каждого свой.
+
+   ── Почему тут везде fallback-цвета ──────────────────────────────────────
+   var(--callout-color) в Live Preview (проверено в DevTools) резолвится в
+   пустое/невалидное значение. По спецификации CSS это роняет ВЕСЬ shorthand
+   `border` в initial-значение (currentColor) вместо того, чтобы честно
+   упасть. Поэтому у каждого использования var(--callout-color) вторым
+   аргументом подставлен явный запасной цвет.
+
+   ── Почему два блока правил ─────────────────────────────────────────────
+   1) `.callout` — сама коробка (работает и в Reading view).
+   2) `.cm-embed-block.cm-callout` — обёртка Live Preview. Obsidian по
+      умолчанию показывает её контур только на hover/focus («меньше мусора
+      при редактировании»). Это отдельная от callout'а рамка, и именно она
+      создаёт эффект «коробки нет, пока не наведёшь». Форсим её видимость.
+
+      Важно: div.callout — ВНУК .cm-embed-block.cm-callout (между ними
+      обёртка .markdown-rendered), поэтому в :has() нужен комбинатор
+      потомка, а не прямого потомка.
+
+   ── Компендиумные типы не трогаем ───────────────────────────────────────
+   statblock, npc, letter, scene, skill, charm, weather, flowchart и gallery
+   стилизуются в dnd5e-compendium.css по-своему (часто вообще без рамки).
+   Они исключены из общих правил ниже.
+   ========================================================================== */
+
+/* --- 1. Запасные цвета по типам (палитра Obsidian) ---------------------- */
+
+/* синий: заметки и информация */
+.callout[data-callout=note],
+.callout[data-callout=seealso],
+.callout[data-callout=info],
+.callout[data-callout=todo],
+.callout[data-callout=important] {
+  --_callout-fallback: 8, 109, 221;
+}
+
+/* голубой: конспекты */
+.callout[data-callout=abstract],
+.callout[data-callout=summary],
+.callout[data-callout=tldr] {
+  --_callout-fallback: 0, 176, 255;
+}
+
+/* бирюзовый: подсказки */
+.callout[data-callout=tip],
+.callout[data-callout=hint] {
+  --_callout-fallback: 0, 191, 165;
+}
+
+/* зелёный: успех */
+.callout[data-callout=success],
+.callout[data-callout=check],
+.callout[data-callout=done] {
+  --_callout-fallback: 8, 185, 78;
+}
+
+/* оранжевый: вопросы и предупреждения */
+.callout[data-callout=question],
+.callout[data-callout=help],
+.callout[data-callout=faq],
+.callout[data-callout=warning],
+.callout[data-callout=caution],
+.callout[data-callout=attention] {
+  --_callout-fallback: 236, 117, 0;
+}
+
+/* красный: провалы и ошибки */
+.callout[data-callout=failure],
+.callout[data-callout=fail],
+.callout[data-callout=missing],
+.callout[data-callout=danger],
+.callout[data-callout=error],
+.callout[data-callout=bug] {
+  --_callout-fallback: 233, 49, 71;
+}
+
+/* фиолетовый: примеры */
+.callout[data-callout=example] {
+  --_callout-fallback: 120, 82, 238;
+}
+
+/* серый: цитаты */
+.callout[data-callout=quote],
+.callout[data-callout=cite] {
+  --_callout-fallback: 158, 158, 158;
+}
+
+/* зелёный «пергамент»: зачитываемый вслух текст и сенсорика (цвета из
+   плагина Admonition — см. .obsidian/plugins/obsidian-admonition/data.json) */
+.callout[data-callout=readaloud],
+.callout[data-callout=sight],
+.callout[data-callout=sound],
+.callout[data-callout=smell],
+.callout[data-callout=touch],
+.callout[data-callout=taste] {
+  --_callout-fallback: 139, 167, 145;
+}
+
+/* золотой: карточка сессии (цвета из плагина Admonition) */
+.callout[data-callout=quest],
+.callout[data-callout=goal],
+.callout[data-callout=theme],
+.callout[data-callout=expect],
+.callout[data-callout=twist],
+.callout[data-callout=keymoments],
+.callout[data-callout=impact],
+.callout[data-callout=seeding] {
+  --_callout-fallback: 186, 156, 106;
+}
+
+/* --- 1a. Иконки кастомных типов ----------------------------------------- */
+
+/* Obsidian нативно поддерживает переменную --callout-icon: в неё кладётся
+   имя иконки Lucide. Это работает для ЛЮБОГО типа callout'а, даже если
+   плагин Admonition про него не знает.
+   Дублируем здесь иконки из data.json плагина, чтобы блоки выглядели
+   правильно сразу — не дожидаясь, пока плагин перечитает конфиг (он это
+   делает только при перезапуске Obsidian). */
+
+.callout[data-callout=sight]      { --callout-icon: lucide-eye; }
+.callout[data-callout=sound]      { --callout-icon: lucide-ear; }
+.callout[data-callout=smell]      { --callout-icon: lucide-wind; }
+.callout[data-callout=touch]      { --callout-icon: lucide-hand; }
+.callout[data-callout=taste]      { --callout-icon: lucide-utensils; }
+
+.callout[data-callout=quest]      { --callout-icon: lucide-scroll; }
+.callout[data-callout=goal]       { --callout-icon: lucide-target; }
+.callout[data-callout=theme]      { --callout-icon: lucide-book-open; }
+.callout[data-callout=expect]     { --callout-icon: lucide-users; }
+.callout[data-callout=twist]      { --callout-icon: lucide-zap; }
+.callout[data-callout=keymoments] { --callout-icon: lucide-key; }
+.callout[data-callout=impact]     { --callout-icon: lucide-git-branch; }
+.callout[data-callout=seeding]    { --callout-icon: lucide-sprout; }
+
+/* --- 2. Сама коробка ---------------------------------------------------- */
+
+.callout:not([data-callout=statblock]):not([data-callout=npc]):not([data-callout=letter]):not([data-callout=scene]):not([data-callout=skill]):not([data-callout=charm]):not([data-callout=weather]):not([data-callout=flowchart]):not([data-callout=gallery]) {
+  border: 1px solid rgba(var(--callout-color, var(--_callout-fallback, 158, 158, 158)), 0.5) !important;
+  border-radius: 8px !important;
+  background-color: rgba(var(--callout-color, var(--_callout-fallback, 158, 158, 158)), 0.06) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.callout:not([data-callout=statblock]):not([data-callout=npc]):not([data-callout=letter]):not([data-callout=scene]):not([data-callout=skill]):not([data-callout=charm]):not([data-callout=weather]):not([data-callout=flowchart]):not([data-callout=gallery]) > .callout-title {
+  background-color: rgba(var(--callout-color, var(--_callout-fallback, 158, 158, 158)), 0.15) !important;
+  border-bottom: 1px solid rgba(var(--callout-color, var(--_callout-fallback, 158, 158, 158)), 0.3) !important;
+  padding: 8px 12px !important;
+}
+
+.callout:not([data-callout=statblock]):not([data-callout=npc]):not([data-callout=letter]):not([data-callout=scene]):not([data-callout=skill]):not([data-callout=charm]):not([data-callout=weather]):not([data-callout=flowchart]):not([data-callout=gallery]) > .callout-content {
+  padding: 8px 15px !important;
+}
+
+/* --- 3. Постоянная рамка в Live Preview --------------------------------- */
+
+/* Базовое правило: рамка есть всегда, цвет по умолчанию серый —
+   ниже он уточняется под конкретный тип через :has(). */
+.cm-embed-block.cm-callout {
+  outline: 1px solid rgba(var(--_lp-callout, 158, 158, 158), 0.5) !important;
+  border-radius: 8px !important;
+}
+
+/* Компендиумным типам возвращаем штатное поведение Obsidian
+   (контур только при наведении), чтобы не ломать их вёрстку. */
+.cm-embed-block.cm-callout:has(.callout[data-callout=statblock]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=npc]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=letter]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=scene]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=skill]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=charm]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=weather]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=flowchart]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=gallery]) {
+  outline: revert !important;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=note]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=seealso]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=info]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=todo]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=important]) {
+  --_lp-callout: 8, 109, 221;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=abstract]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=summary]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=tldr]) {
+  --_lp-callout: 0, 176, 255;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=tip]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=hint]) {
+  --_lp-callout: 0, 191, 165;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=success]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=check]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=done]) {
+  --_lp-callout: 8, 185, 78;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=question]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=help]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=faq]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=warning]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=caution]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=attention]) {
+  --_lp-callout: 236, 117, 0;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=failure]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=fail]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=missing]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=danger]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=error]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=bug]) {
+  --_lp-callout: 233, 49, 71;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=example]) {
+  --_lp-callout: 120, 82, 238;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=quote]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=cite]) {
+  --_lp-callout: 158, 158, 158;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=readaloud]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=sight]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=sound]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=smell]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=touch]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=taste]) {
+  --_lp-callout: 139, 167, 145;
+}
+
+.cm-embed-block.cm-callout:has(.callout[data-callout=quest]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=goal]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=theme]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=expect]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=twist]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=keymoments]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=impact]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=seeding]) {
+  --_lp-callout: 186, 156, 106;
+}
+
+/* --- 4. Компактные блоки: сенсорика и карточка сессии -------------------- */
+
+/* И чувства, и категории сессии идут стопкой по 5–8 штук подряд, поэтому
+   вертикальные отступы и внутренние поля ужимаем — иначе раздел
+   расползается на пол-экрана. */
+.callout[data-callout=sight],
+.callout[data-callout=sound],
+.callout[data-callout=smell],
+.callout[data-callout=touch],
+.callout[data-callout=taste],
+.callout[data-callout=quest],
+.callout[data-callout=goal],
+.callout[data-callout=theme],
+.callout[data-callout=expect],
+.callout[data-callout=twist],
+.callout[data-callout=keymoments],
+.callout[data-callout=impact],
+.callout[data-callout=seeding] {
+  margin-block: 4px !important;
+}
+
+.callout[data-callout=sight] > .callout-title,
+.callout[data-callout=sound] > .callout-title,
+.callout[data-callout=smell] > .callout-title,
+.callout[data-callout=touch] > .callout-title,
+.callout[data-callout=taste] > .callout-title,
+.callout[data-callout=quest] > .callout-title,
+.callout[data-callout=goal] > .callout-title,
+.callout[data-callout=theme] > .callout-title,
+.callout[data-callout=expect] > .callout-title,
+.callout[data-callout=twist] > .callout-title,
+.callout[data-callout=keymoments] > .callout-title,
+.callout[data-callout=impact] > .callout-title,
+.callout[data-callout=seeding] > .callout-title {
+  padding: 4px 12px !important;
+}
+
+.callout[data-callout=sight] > .callout-content,
+.callout[data-callout=sound] > .callout-content,
+.callout[data-callout=smell] > .callout-content,
+.callout[data-callout=touch] > .callout-content,
+.callout[data-callout=taste] > .callout-content,
+.callout[data-callout=quest] > .callout-content,
+.callout[data-callout=goal] > .callout-content,
+.callout[data-callout=theme] > .callout-content,
+.callout[data-callout=expect] > .callout-content,
+.callout[data-callout=twist] > .callout-content,
+.callout[data-callout=keymoments] > .callout-content,
+.callout[data-callout=impact] > .callout-content,
+.callout[data-callout=seeding] > .callout-content {
+  padding: 6px 15px !important;
+}
+
+/* В Live Preview каждый блок — отдельный .cm-embed-block, и между ними
+   Obsidian ставит свой отступ. Ужимаем и его. */
+.cm-embed-block.cm-callout:has(.callout[data-callout=sight]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=sound]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=smell]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=touch]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=taste]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=quest]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=goal]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=theme]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=expect]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=twist]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=keymoments]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=impact]),
+.cm-embed-block.cm-callout:has(.callout[data-callout=seeding]) {
+  margin-block: 4px !important;
+}

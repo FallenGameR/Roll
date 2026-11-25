@@ -1,0 +1,36 @@
+/* Статблок в Live Preview под цвет статблока в панели трекера.
+
+   В боковой панели статблок рисуется в режиме чтения и берёт свои цвета:
+   курсив идёт цветом текста, ссылки обычным цветом ссылок. В редакторе поверх
+   него ложатся правила темы для курсива и внутренних ссылок, отчего пояснения
+   зеленеют, а названия действий голубеют.
+
+   Красим только то, что внутри статблока, и только в режиме редактора. */
+
+.markdown-source-view .statblock em,
+.markdown-source-view .statblock i,
+.markdown-source-view .statblock .cm-em,
+.markdown-source-view .statblock .cm-emphasis {
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+
+.markdown-source-view .statblock a,
+.markdown-source-view .statblock .internal-link,
+.markdown-source-view .statblock .cm-link,
+.markdown-source-view .statblock .cm-hmd-internal-link {
+  color: var(--link-color) !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: inherit !important;
+  text-decoration: underline !important;
+}
+
+.markdown-source-view .statblock strong,
+.markdown-source-view .statblock b,
+.markdown-source-view .statblock .cm-strong {
+  color: inherit;
+}

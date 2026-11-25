@@ -1,0 +1,27 @@
+/* Fix: the "obsidian" (dark) theme sets --bold-color to a light shade meant
+   for dark backgrounds. Statblocks (Fantasy Statblocks plugin) render on a
+   light cream background (--statblock-background-color), so plain markdown
+   **bold** text inside the statblock body (e.g. "Cantrips (at will):")
+   becomes low-contrast/unreadable. Force bold text inside statblocks to use
+   the statblock's own dark accent color instead. */
+.statblock-markdown strong,
+.statblock-markdown b {
+  color: var(--statblock-primary-color, #7a200d) !important;
+  /* Reset theme's bold styling (font-weight calc + font-family stacking)
+     so plain markdown bold matches the plugin's own bold/italic trait
+     names in weight, style, and family instead of looking bigger/off-font. */
+  font-weight: 700 !important;
+  font-style: inherit !important;
+  font-family: inherit !important;
+}
+
+/* Reset default browser paragraph margins inside statblocks so plain
+   markdown paragraphs (e.g. "Cantrips (at will): ...") line up with the
+   plugin's own tighter trait/line spacing instead of looking detached. */
+.statblock-markdown p {
+  margin: 0 0 0.5em 0;
+  line-height: 1.3em;
+}
+.statblock-markdown p:last-child {
+  margin-bottom: 0;
+}

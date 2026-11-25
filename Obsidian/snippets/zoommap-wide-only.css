@@ -1,0 +1,49 @@
+/* Расширяет ТОЛЬКО блок интерактивной карты (zoommap) до полной ширины
+   панели, а весь обычный текст (в т.ч. callout'ы/admonitions) остаётся на
+   прежней читаемой ширине (var(--file-line-width)) и по центру.
+
+   Реальная структура DOM (подтверждено через DevTools):
+     .cm-sizer > .cm-contentContainer > .cm-content > (.cm-line | .cm-preview-code-block.cm-lang-zoommap)
+     .markdown-preview-sizer > div (один из div — блок карты)
+
+   Шаги:
+   1. Снимаем ограничение читаемой ширины с самой .cm-sizer /
+      .markdown-preview-sizer (иначе более узкий родитель обнуляет любую
+      попытку расширить его детей).
+   2. Возвращаем каждую обычную строку/блок текста назад к читаемой
+      ширине, по центру.
+   3. Только для блока карты (содержит .block-language-zoommap) — снова
+      растягиваем на 100%.
+
+   Использование: добавь класс "wide-zoommap" в cssclasses во frontmatter
+   заметки, где есть блок zoommap. */
+
+/* --- 1. Снимаем ограничение с сайзера целиком --- */
+
+.markdown-source-view.mod-cm6.is-readable-line-width.wide-zoommap .cm-sizer,
+.markdown-preview-view.is-readable-line-width.wide-zoommap .markdown-preview-sizer {
+  max-width: unset !important;
+}
+
+/* --- 2. Возвращаем обычные строки/блоки к читаемой ширине --- */
+
+.markdown-source-view.mod-cm6.wide-zoommap .cm-contentContainer > .cm-content > .cm-line,
+.markdown-source-view.mod-cm6.wide-zoommap .cm-contentContainer > .cm-content > div {
+  max-width: var(--file-line-width);
+  margin-inline: auto;
+}
+
+.markdown-preview-view.wide-zoommap .markdown-preview-sizer > div {
+  max-width: var(--file-line-width);
+  margin-inline: auto;
+}
+
+/* --- 3. Исключение: сам блок карты остаётся на всю ширину --- */
+
+.markdown-source-view.mod-cm6.wide-zoommap .cm-contentContainer > .cm-content > div:has(.block-language-zoommap) {
+  max-width: 100% !important;
+}
+
+.markdown-preview-view.wide-zoommap .markdown-preview-sizer > div:has(.block-language-zoommap) {
+  max-width: 100% !important;
+}

@@ -1,0 +1,9 @@
+{
+  "id": "battlemap-links",
+  "name": "Ссылки с батлмапа",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Клик по токену на батлмапе Excalidraw открывает статблок в панели Combatant, клик по маркеру боя запускает бой из комнаты, как кнопка в заметке.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

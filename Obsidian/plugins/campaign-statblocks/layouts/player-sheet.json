@@ -1,0 +1,255 @@
+{
+  "blocks": [
+    {
+      "type": "inline",
+      "id": "7b3bb278a059",
+      "properties": [],
+      "hasRule": true,
+      "nested": [
+        {
+          "type": "group",
+          "id": "159efbc24650",
+          "properties": [
+            "name",
+            "type",
+            "subtype"
+          ],
+          "conditioned": true,
+          "nested": [
+            {
+              "type": "inline",
+              "id": "6d0ae2d277c4",
+              "properties": [],
+              "hasRule": false,
+              "nested": [
+                {
+                  "type": "heading",
+                  "id": "6c74eee204a8",
+                  "properties": [
+                    "name"
+                  ],
+                  "conditioned": true,
+                  "size": 1
+                },
+                {
+                  "type": "inline",
+                  "id": "aeb019f8dcb7",
+                  "properties": [],
+                  "hasRule": false,
+                  "nested": [
+                    {
+                      "type": "action",
+                      "id": "38cec2172d85",
+                      "icon": "sword",
+                      "callback": "try { InitiativeTracker.newEncounter({roll: true, creatures: [monster]}); } catch(e) {}"
+                    },
+                    {
+                      "type": "action",
+                      "id": "bc486bdb76ac",
+                      "icon": "plus-with-circle",
+                      "callback": "try { InitiativeTracker.addCreatures([monster]); } catch(e) {}"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "subheading",
+              "id": "af199f6f17cb",
+              "properties": [
+                "type",
+                "subtype"
+              ],
+              "conditioned": true,
+              "separator": ", "
+            }
+          ]
+        },
+        {
+          "type": "image",
+          "id": "0dd7d2a85607",
+          "properties": [
+            "image"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "id": "dab5e04a64c9",
+      "properties": [
+        "ac",
+        "hp",
+        "speed"
+      ],
+      "hasRule": true,
+      "conditioned": true,
+      "nested": [
+        {
+          "type": "property",
+          "id": "9b10c7fdbda0",
+          "properties": [
+            "ac"
+          ],
+          "display": "Класс доспеха",
+          "conditioned": true,
+          "callback": "const ac = [monster.ac];if (monster.ac_class) {ac.push(`(${monster.ac_class})`);}return ac.join(\" \");"
+        },
+        {
+          "type": "property",
+          "id": "d308e76e403d",
+          "properties": [
+            "hp"
+          ],
+          "display": "Хиты",
+          "conditioned": true,
+          "dice": false,
+          "callback": "return monster.hit_dice ? `${monster.hp}, кости хитов ${monster.hit_dice}` : `${monster.hp}`;"
+        },
+        {
+          "type": "property",
+          "id": "4df856f73c46",
+          "properties": [
+            "speed"
+          ],
+          "display": "Скорость",
+          "conditioned": true
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "id": "7e7f0119f06d",
+      "properties": [
+        "stats"
+      ],
+      "headers": [
+        "Сил",
+        "Лов",
+        "Тел",
+        "Инт",
+        "Мдр",
+        "Хар"
+      ],
+      "calculate": true,
+      "hasRule": true,
+      "conditioned": true
+    },
+    {
+      "type": "group",
+      "id": "48258a992597",
+      "properties": [
+        "saves",
+        "skillsaves",
+        "senses",
+        "languages",
+        "cr"
+      ],
+      "hasRule": true,
+      "conditioned": true,
+      "nested": [
+        {
+          "type": "property",
+          "id": "4fab77a7e07d",
+          "properties": [
+            "saves"
+          ],
+          "display": "Спасброски",
+          "conditioned": true,
+          "callback": "const n={strength:\"Сила\",dexterity:\"Ловкость\",constitution:\"Телосложение\",intelligence:\"Интеллект\",wisdom:\"Мудрость\",charisma:\"Харизма\"};return (monster.saves??[]).flatMap(o=>Object.entries(o)).map(([k,v])=>`${n[k]??k} ${v>=0?\"+\":\"\"}${v}`).join(\", \");"
+        },
+        {
+          "type": "saves",
+          "id": "b4bb8e326ad8",
+          "properties": [
+            "skillsaves"
+          ],
+          "display": "Навыки",
+          "conditioned": true
+        },
+        {
+          "type": "property",
+          "id": "cbfbb2833043",
+          "properties": [
+            "senses"
+          ],
+          "display": "Чувства",
+          "conditioned": true,
+          "callback": "return String(monster.senses).replace(\"passive Perception\", \"пассивное Восприятие\");"
+        },
+        {
+          "type": "property",
+          "id": "db4cd280f380",
+          "properties": [
+            "languages"
+          ],
+          "display": "Языки",
+          "conditioned": true
+        },
+        {
+          "type": "property",
+          "id": "e3c9b42f07b0",
+          "properties": [
+            "cr"
+          ],
+          "display": "Бонус мастерства",
+          "conditioned": true,
+          "callback": "return `+${Math.max(2, Math.floor(2 + ((Number(monster.cr) || 1) - 1) / 4))}`;"
+        }
+      ]
+    },
+    {
+      "type": "traits",
+      "id": "0d504843f049",
+      "properties": [
+        "traits"
+      ],
+      "heading": "Умения",
+      "conditioned": true,
+      "dice": false
+    },
+    {
+      "type": "traits",
+      "id": "b2abfd47905c",
+      "properties": [
+        "actions"
+      ],
+      "heading": "Действия",
+      "conditioned": true,
+      "dice": false
+    },
+    {
+      "type": "traits",
+      "id": "1fe9199e45e3",
+      "properties": [
+        "bonus_actions"
+      ],
+      "heading": "Бонусные действия",
+      "conditioned": true,
+      "dice": false
+    },
+    {
+      "type": "traits",
+      "id": "44d5d0a9873d",
+      "properties": [
+        "reactions"
+      ],
+      "heading": "Реакции",
+      "conditioned": true,
+      "dice": false
+    },
+    {
+      "type": "traits",
+      "id": "1b56b7309508",
+      "properties": [
+        "magic_items"
+      ],
+      "heading": "Предметы",
+      "conditioned": true,
+      "dice": false
+    }
+  ],
+  "id": "player-sheet-layout",
+  "name": "Лист игрока",
+  "edited": false
+}

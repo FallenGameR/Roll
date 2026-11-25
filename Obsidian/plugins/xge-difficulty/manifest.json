@@ -1,0 +1,9 @@
+{
+  "id": "xge-difficulty",
+  "name": "Сложность боя по Занатару",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Сложность боя в Initiative Tracker по странице кампании Сложность боя (Занатар): лёгкий, честный, смертельный вместо XP.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

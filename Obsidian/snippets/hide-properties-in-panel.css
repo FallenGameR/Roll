@@ -1,0 +1,20 @@
+/* Прячет служебные свойства в боковой панели "File properties".
+
+   В шапке файла они нужны и остаются видны: выборка ограничена листом с
+   data-type="file-properties", то же исключение, что стоит в плагине
+   fold-properties-always.
+
+   Чтобы спрятать ещё одно свойство, допиши его ключ в список ниже. Флаг i
+   после значения обязателен: в атрибуте ключ стоит в нижнем регистре, и
+   camelCase вроде obsidianUIMode без него не сходится. */
+
+.workspace-leaf-content[data-type="file-properties"]
+  .metadata-property[data-property-key="cssclasses" i],
+.workspace-leaf-content[data-type="file-properties"]
+  .metadata-property[data-property-key="statblock" i],
+.workspace-leaf-content[data-type="file-properties"]
+  .metadata-property[data-property-key="tags" i],
+.workspace-leaf-content[data-type="file-properties"]
+  .metadata-property[data-property-key="obsidianUIMode" i] {
+  display: none;
+}

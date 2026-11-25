@@ -9,7 +9,8 @@
                           'PNG prompts and icons, Copilot control panel and ' +
                           'text-edit canvas, ' +
                           'file transfer to reMarkable via RCU, ' +
-                          'PDF adventures to Obsidian markdown. ' +
+                          'PDF adventures to Obsidian markdown, ' +
+                          'our Obsidian plugins and CSS snippets with an installer. ' +
                           'Standalone scripts for maps, players, audio and ' +
                           'vault checks live in Tools.'
     PowerShellVersion  = '5.1'
@@ -42,7 +43,9 @@
         'Get-RemarkableConnection',
         'Set-RemarkableConnection',
         'New-RemarkableCollection',
-        'Convert-PdfToMarkdown'
+        'Convert-PdfToMarkdown',
+        'Get-ObsidianKit',
+        'Install-ObsidianKit'
     )
     AliasesToExport    = @('roll')
     CmdletsToExport    = @()

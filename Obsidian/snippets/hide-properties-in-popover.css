@@ -1,0 +1,30 @@
+/* Убирает блок свойств во всплывающем предпросмотре.
+
+   В попапе свойства всё равно свёрнуты плагином fold-properties-always, и от
+   блока остаётся пустая полоса: сам контейнер высотой в строку плюс padding
+   сверху и margin снизу. Прячем контейнер целиком, вместе с заголовком
+   "Properties" и кнопкой "Add property".
+
+   !important обязателен: правила темы длиннее и перебивают обычное объявление.
+
+   Выборка ограничена .hover-popover: в шапке файла и в боковой панели
+   свойства нужны, там их правят. */
+
+.hover-popover .metadata-container,
+.hover-popover :has(> .metadata-properties-heading) {
+  display: none !important;
+}
+
+.hover-popover .markdown-preview-view,
+.hover-popover .markdown-preview-sizer {
+  padding-top: 0 !important;
+}
+
+/* Заголовок не должен лежать на самом краю окна. */
+.hover-popover .markdown-embed-content {
+  padding-top: 10px !important;
+}
+
+.hover-popover .markdown-preview-sizer > :first-child {
+  margin-top: 0 !important;
+}
