@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import queue
+import re
 import socket
 import sys
 import threading
@@ -284,6 +285,13 @@ def chime(name):
 
 
 CHIME_RATE = 44100
+# Realtek этого ноутбука засыпает через 5 с тишины (D3, ConservationIdleTime
+# в PowerSettings драйвера). Поток Speaker стартует за единицы мс, и начало
+# звонка могло уходить в просыпающийся ЦАП: звук выходил смазанным. Поэтому
+# спящей карте звонок подаётся с тишиной впереди, а бодрой - сразу: 120 мс
+# на каждое нажатие заметны. winsound прятал это сам, открывая устройство
+# около 400 мс.
+CHIME_LEAD_S = 0.12
 
 
 def wav_samples(path):
@@ -300,6 +308,96 @@ def wav_samples(path):
         return None
 
 
+class DevicePower:
+    """Состояние питания звуковой карты по её имени: D0 бодра, D3 спит.
+
+    Имя берётся из WASAPI («Speakers (Realtek(R) Audio)»), в скобках стоит
+    имя устройства класса MEDIA в диспетчере устройств. Запрос состояния
+    через SetupAPI стоит микросекунды.
+    """
+
+    MEDIA = "{4d36e96c-e325-11ce-bfc1-08002be10318}"
+    PROPS = "{a45c254e-df1c-4efd-8020-67d146a850e0}"  # 14 - имя, 32 - питание
+
+    def __init__(self):
+        self.hdev = None
+        self.info = None
+
+    @staticmethod
+    def _guid(text):
+        import uuid
+        u = uuid.UUID(text)
+        g = _GUID()
+        g.Data1, g.Data2, g.Data3 = u.fields[0], u.fields[1], u.fields[2]
+        g.Data4[:] = u.bytes[8:]
+        return g
+
+    def _prop(self, info, pid):
+        key = _DEVPROPKEY(self._guid(self.PROPS), pid)
+        kind, need = ctypes.c_ulong(), ctypes.c_ulong()
+        buf = (ctypes.c_ubyte * 512)()
+        ok = _setupapi.SetupDiGetDevicePropertyW(self.hdev, ctypes.byref(info), ctypes.byref(key),
+                                                ctypes.byref(kind), buf, 512, ctypes.byref(need), 0)
+        return bytes(buf[:need.value]) if ok else None
+
+    def find(self, wasapi_name):
+        self.close()
+        m = re.search(r"\((.+)\)\s*$", wasapi_name or "")
+        if not m:
+            return
+        try:
+            self.hdev = _setupapi.SetupDiGetClassDevsW(ctypes.byref(self._guid(self.MEDIA)), None, None, 2)
+            i = 0
+            while True:
+                info = _SP_DEVINFO_DATA()
+                info.cbSize = ctypes.sizeof(info)
+                if not _setupapi.SetupDiEnumDeviceInfo(self.hdev, i, ctypes.byref(info)):
+                    break
+                name = self._prop(info, 14)
+                if name and name.decode("utf-16-le").rstrip("\0") == m.group(1):
+                    self.info = info
+                    return
+                i += 1
+        except Exception as exc:  # noqa: BLE001
+            log.info("Speaker power state unavailable: %s", exc)
+        self.close()
+
+    def state(self):
+        """1 - D0, 4 - D3, None - не знаю."""
+        if self.info is None:
+            return None
+        data = self._prop(self.info, 32)
+        return int.from_bytes(data[4:8], "little") if data and len(data) >= 8 else None
+
+    def close(self):
+        if self.hdev:
+            _setupapi.SetupDiDestroyDeviceInfoList(self.hdev)
+        self.hdev, self.info = None, None
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [("Data1", ctypes.c_ulong), ("Data2", ctypes.c_ushort), ("Data3", ctypes.c_ushort),
+                ("Data4", ctypes.c_ubyte * 8)]
+
+
+class _DEVPROPKEY(ctypes.Structure):
+    _fields_ = [("fmtid", _GUID), ("pid", ctypes.c_ulong)]
+
+
+class _SP_DEVINFO_DATA(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_ulong), ("ClassGuid", _GUID), ("DevInst", ctypes.c_ulong),
+                ("Reserved", ctypes.c_size_t)]
+
+
+_setupapi = ctypes.WinDLL("setupapi")
+_setupapi.SetupDiGetClassDevsW.restype = ctypes.c_void_p
+_setupapi.SetupDiGetClassDevsW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_ulong]
+_setupapi.SetupDiEnumDeviceInfo.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p]
+_setupapi.SetupDiGetDevicePropertyW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                                                ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong]
+_setupapi.SetupDiDestroyDeviceInfoList.argtypes = [ctypes.c_void_p]
+
+
 class Speaker:
     """Динамики для звонков, открытые заранее.
 
@@ -307,13 +405,15 @@ class Speaker:
     ноутбука это около 240 мс плюс 180 мс буфера, и звонок опаздывал почти
     на полсекунды от нажатия. Поток WASAPI с маленьким буфером открыт всё
     время, но не запущен: такой поток не держит устройство и не тратит
-    процессор, а запускается за единицы миллисекунд, буфер 20-30 мс.
+    процессор, а запускается за единицы миллисекунд, буфер 20-30 мс. Держать
+    его запущенным на тишине нельзя: активный поток не даёт ноутбуку уснуть.
     """
 
     def __init__(self):
         self.stream = None
         self.data = None
         self.pos = 0
+        self.power = DevicePower()
 
     def _callback(self, out, frames, *_):
         data, n = self.data, 0
@@ -336,6 +436,7 @@ class Speaker:
                                           channels=2, dtype="float32", latency="low",
                                           extra_settings=sd.WasapiSettings(auto_convert=True),
                                           callback=self._callback)
+            self.power.find(sd.query_devices(wasapi["default_output_device"])["name"])
         except Exception as exc:  # noqa: BLE001
             log.info("Speakers not opened, chimes via winsound: %s", exc)
 
@@ -343,6 +444,11 @@ class Speaker:
         if self.stream is None:
             return False
         try:
+            state = self.power.state()
+            if state is not None and state > 1:
+                lead = np.zeros((int(CHIME_RATE * CHIME_LEAD_S), 2), dtype="float32")
+                samples = np.concatenate([lead, samples])
+                log.info("Speakers asleep (D%d), chime after %d ms of silence", state - 1, CHIME_LEAD_S * 1000)
             self.stream.stop()  # прошлый звонок, если ещё звучит
             self.data, self.pos = samples, 0
             self.stream.start()
@@ -353,6 +459,7 @@ class Speaker:
             return False
 
     def close(self):
+        self.power.close()
         if self.stream is not None:
             try:
                 self.stream.close()

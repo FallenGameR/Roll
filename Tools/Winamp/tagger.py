@@ -752,6 +752,10 @@ PAGE = r"""<!doctype html>
  #scenes.editing .scene b.x { display:block; }
  #scenes.editing .scene { cursor:grab; border-style:dashed; }
  #scenes.editing .place h3 { cursor:grab; }
+ .fold { display:inline-block; margin:0 6px 6px 0; padding:6px 0 0 8px; border:1px dashed #4a5a6e;
+         border-radius:8px; background:#191c23; cursor:grab; vertical-align:top; }
+ .fold > em { display:inline-block; margin:0 8px 6px 0; font-style:normal; font-size:12px; color:#8b8f9c;
+              text-transform:uppercase; letter-spacing:.06em; }
  #scenes .dragging { opacity:.4; }
  #scenes.editing .scene:hover { border-color:#333744; }
  .scene b.x:hover { color:#fff; background:#a8434c; border-color:#e06c75; }
@@ -1323,21 +1327,37 @@ function drawScenes(){
       `<b class="x" title="убрать из списка (в Winamp останется)">×</b></span>`;
   };
   for (const [place, list] of groups){
-    // Темы НПС собраны в свою подгруппу в конце локации, как группы тегов:
-    // в кнопке только имя, приставка «НПС - » ушла в подпись.
-    // В режиме правки НПС раскрыты в обычные кнопки: у пункта списка
-    // крестика не поставить.
-    const npc = editing ? [] : list.filter(s => s.scene.startsWith("НПС - "));
+    // Темы НПС и эффекты собраны в выпадающие списки, как группы тегов: в
+    // пункте только имя, приставка ушла в подпись списка.
+    // Фон - тоже эффект. Играет всегда одна тема группы, поэтому список
+    // размером с кнопку сцены, выбор сразу включает тему. В режиме правки
+    // список нарисован рамкой с подписью, внутри его темы кнопками: рамку
+    // тащат, чтобы поставить список в другое место, кнопки внутри - чтобы
+    // поменять порядок пунктов, крестиком тему скрывают. Класс npc у обоих
+    // списков общий: на нём стили и защита открытого списка от перерисовки.
+    const folds = [
+      {label: "НПС", prefixes: ["НПС - "]},
+      {label: "Эффекты", prefixes: ["Эффект - ", "Фон - "]},
+    ].map(f => ({...f, items: list.filter(s => f.prefixes.some(p => s.scene.startsWith(p)))}))
+     .filter(f => f.items.length);
+    const folded = new Set(folds.flatMap(f => f.items));
     html += `<div class="place" data-place="${esc(place)}"><h3>${esc(place)}</h3>`;
-    for (const s of list) if (!npc.includes(s)) html += chip(s, s.scene || place);
-    if (npc.length){
-      // Тема НПС играет одна, поэтому все НПС локации - один выпадающий
-      // список размером с кнопку сцены; выбор сразу включает тему.
-      const cur = npc.find(s => s.title === sceneNow);
-      html += `<select class="npc${cur ? " now" : ""}" title="Тема НПС">` +
-        `<option value="" ${cur ? "" : "selected"} disabled>НПС</option>` +
-        npc.map(s => `<option value="${esc(s.title)}" ${s === cur ? "selected" : ""}>${esc(s.scene.slice(6))}</option>`).join("") +
+    // Список стоит там, где в порядке локации стоит первая тема его группы.
+    const foldHtml = f => {
+      const name = s => { const p = f.prefixes.find(p => s.scene.startsWith(p)); return s.scene.slice(p.length); };
+      if (editing)
+        return `<span class="fold" title="перетащи рамку, чтобы переставить список"><em>${esc(f.label)}</em>` +
+          f.items.map(s => chip(s, name(s))).join("") + `</span>`;
+      const cur = f.items.find(s => s.title === sceneNow);
+      return `<select class="npc${cur ? " now" : ""}" title="${esc(f.label)}">` +
+        `<option value="" ${cur ? "" : "selected"} disabled>${esc(f.label)}</option>` +
+        f.items.map(s => `<option value="${esc(s.title)}" ${s === cur ? "selected" : ""}>${esc(name(s))}</option>`).join("") +
         `</select>`;
+    };
+    for (const s of list){
+      if (!folded.has(s)) { html += chip(s, s.scene || place); continue; }
+      const f = folds.find(f => f.items[0] === s);
+      if (f) html += foldHtml(f);
     }
     html += `</div>`;
   }
@@ -1368,10 +1388,11 @@ function drawScenes(){
 // за заголовок. Порядок уходит на сервер и переживает перезапуск.
 let dragging = null;
 function wireDrag(list){
-  list.querySelectorAll(".scene").forEach(el => el.draggable = true);
+  list.querySelectorAll(".scene, .fold").forEach(el => el.draggable = true);
   list.querySelectorAll(".place h3").forEach(h => { h.draggable = true; h.title = "перетащи, чтобы переставить место"; });
   list.ondragstart = e => {
-    const chip = e.target.closest(".scene"), head = e.target.closest(".place h3");
+    // Кнопка внутри рамки списка тащится сама, рамка - за свободное место.
+    const chip = e.target.closest(".scene, .fold"), head = e.target.closest(".place h3");
     dragging = chip || (head && head.parentElement);
     if (!dragging) return;
     dragging.classList.add("dragging");
@@ -1380,9 +1401,13 @@ function wireDrag(list){
   };
   list.ondragover = e => {
     if (!dragging) return;
-    if (dragging.matches(".scene")){
-      const over = e.target.closest(".scene");
-      if (!over || over === dragging || over.parentElement !== dragging.parentElement) return;
+    if (dragging.matches(".scene, .fold")){
+      // Соседом считается кнопка или рамка того же уровня: кнопка внутри
+      // рамки ходит только внутри неё, а снаружи рамка - одно целое.
+      let over = e.target.closest(".scene, .fold");
+      while (over && over.parentElement !== dragging.parentElement)
+        over = over.parentElement.closest(".scene, .fold");
+      if (!over || over === dragging) return;
       e.preventDefault();
       const r = over.getBoundingClientRect();
       over.parentElement.insertBefore(dragging, e.clientX < r.left + r.width / 2 ? over : over.nextSibling);
