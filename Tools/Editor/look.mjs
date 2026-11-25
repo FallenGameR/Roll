@@ -63,7 +63,7 @@ function serial(fn) {
     return run;
 }
 
-const RATING = { like: "нравится", hide: "скрыта" };
+const RATING = { like: "нравится" };
 
 // Слот картинки: { path, label }. path может указывать на файл, которого
 // ещё нет (кадр рисуется), или быть null (слот без имени, его заполнит add).
@@ -119,11 +119,14 @@ function view(state) {
             const st = stat(s.path);
             const ok = !!st && st.size > 0;
             total++; if (ok) ready++;
+            const m = { ...(s.path ? state.marks[markKey(s.path)] ?? {} : {}) };
+            // Недолгое время «скрыта» была оценкой; теперь это отдельный признак.
+            if (m.rating === "hide") { m.rating = undefined; m.hidden = true; }
             return {
                 gi, ii, path: s.path, label: s.label,
                 name: s.path ? basename(s.path) : (s.label || `кадр ${ii + 1}`),
                 ready: ok, v: ok ? Math.round(st.mtimeMs) : 0, alpha: ok && hasAlpha(s.path, st),
-                ...(s.path ? state.marks[markKey(s.path)] ?? {} : {}),
+                ...m, hidden: !!m.hidden,
             };
         }),
     }));
@@ -148,20 +151,20 @@ async function submit(session, id, body) {
         const dir = session?.workspacePath
             ? (existsSync(join(session.workspacePath, "files")) ? join(session.workspacePath, "files") : session.workspacePath)
             : null;
-        const rows = ["group\tfile\trating\tcomment\tpath"];
+        const rows = ["group\tfile\trating\thidden\tcomment\tpath"];
         const msg = [];
         let rated = 0, hidden = 0, total = 0;
         for (const g of view(state).groups) {
             msg.push(`## ${g.name}` + (cell(g.comment) ? `: ${cell(g.comment)}` : ""));
-            rows.push([g.name, "", "группа", g.comment, ""].map(cell).join("\t"));
+            rows.push([g.name, "", "группа", "", g.comment, ""].map(cell).join("\t"));
             for (const im of g.images) {
                 if (!im.ready) continue;  // недорисованные кадры оценить было нельзя
                 total++;
                 const rating = RATING[im.rating] ?? "—";
                 if (im.rating === "like") rated++;
-                if (im.rating === "hide") hidden++;
-                rows.push([g.name, im.name, rating, im.comment, im.path].map(cell).join("\t"));
-                msg.push(`- ${im.name} → ${rating}` + (cell(im.comment) ? `: ${cell(im.comment)}` : ""));
+                if (im.hidden) hidden++;
+                rows.push([g.name, im.name, rating, im.hidden ? "да" : "", im.comment, im.path].map(cell).join("\t"));
+                msg.push(`- ${im.name} → ${rating}` + (im.hidden ? " (скрыта)" : "") + (cell(im.comment) ? `: ${cell(im.comment)}` : ""));
             }
         }
         if (dir) {
@@ -249,7 +252,7 @@ export const actions = {
             groups: v.groups.map((g) => ({
                 name: g.name, comment: g.comment,
                 images: g.images.map((im) => ({ file: im.name, path: im.path, ready: im.ready,
-                                                rating: RATING[im.rating] ?? "—", comment: im.comment ?? "" })),
+                                                rating: RATING[im.rating] ?? "—", hidden: im.hidden, comment: im.comment ?? "" })),
             })),
         };
     },
@@ -265,7 +268,7 @@ export const routes = {
         if (!path || !existsSync(path)) throw fail("no_image", "нет такой картинки");
         return { file: path };
     },
-    // { rid, g, n?, rating?: "like"|"hide"|null, comment? }; без n - комментарий группы.
+    // { rid, g, n?, rating?: "like"|null, hidden?: bool, comment? }; без n - комментарий группы.
     "/mark": async ({ session, query, body }) => serial(async () => {
         const state = await load(session, query.i);
         if (!state || state.rid !== body.rid || state.status !== "ждёт") return { ok: false };
@@ -278,7 +281,9 @@ export const routes = {
             if (!path) return { ok: false };
             const key = markKey(path);
             const m = { ...(state.marks[key] ?? {}) };
+            if (m.rating === "hide") { m.rating = undefined; m.hidden = true; }
             if (body.rating !== undefined) m.rating = RATING[body.rating] ? body.rating : undefined;
+            if (body.hidden !== undefined) m.hidden = !!body.hidden || undefined;
             if (body.comment !== undefined) m.comment = String(body.comment);
             state.marks[key] = m;
         }

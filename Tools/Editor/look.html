@@ -36,7 +36,7 @@
              overflow: hidden; field-sizing: content; min-height: 0; height: auto; padding: 5px 10px;
              border-radius: 6px; border: 1px solid var(--edge); background: transparent; color: inherit; }
   textarea:focus { outline: none; border-color: var(--like); }
-  .grid { display: grid; gap: 16px; margin-top: 10px; align-items: start; }
+  .grid { display: grid; gap: 16px; margin-top: 10px; align-items: start; grid-auto-flow: row dense; }
   .grid.c1 { grid-template-columns: 1fr; }
   .grid.c2 { grid-template-columns: 1fr 1fr; }
   .card { border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
@@ -59,9 +59,9 @@
   .hide { border: 0; padding: 2px; line-height: 0; color: var(--muted); opacity: .55; transition: opacity .15s; }
   .hide:hover:not(:disabled) { opacity: 1; }
   .hide svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
-  .card.hidden { box-shadow: none; opacity: .6; }
+  .card.hidden { box-shadow: none; grid-column: 1 / -1; }
   .card.hidden > .bar { border-bottom: 0; padding: 3px 8px; }
-  .card.hidden .name { font-weight: 400; color: var(--muted); text-decoration: line-through; }
+  .card.hidden .name { font-weight: 400; }
   .unhide { font-size: 12px; padding: 1px 10px; }
   .pick { border: 0; padding: 2px; line-height: 0; color: var(--muted); }
   .pick svg { width: 26px; height: 26px; transition: transform .12s; }
@@ -203,17 +203,18 @@ function card(im, locked){
   }
   const dis = locked ? "disabled" : "";
   const text = drafts[im.path] ?? im.comment ?? "";
-  // Скрытая картинка сворачивается в полоску с подписью и «показать».
-  if (im.rating === "hide")
+  // Скрытая картинка сворачивается в полоску: подпись, галочка и «показать».
+  // Скрытие и отметка независимы.
+  const on = im.rating === "like";
+  if (im.hidden)
     return `<div class="card hidden" data-k="${key}">` +
       `<div class="bar"><span class="name">${caption(im)}</span>` +
-      `<button class="rate unhide" data-r="hide" ${dis}>показать</button></div></div>`;
-  // Оценка одна: «нравится» или «скрыта», повторный клик снимает. Подпись,
-  // фон, «скрыть» и галочка над картинкой, комментарий под ней.
-  const on = im.rating === "like";
+      `<span class="aux"><button class="unhide" ${dis}>показать</button></span>` +
+      pick(on, dis) + `</div></div>`;
+  // Подпись, фон, «скрыть» и галочка над картинкой, комментарий под ней.
   return `<div class="card${on ? " like" : ""}" data-k="${key}">` +
     `<div class="bar"><span class="name">${caption(im)}</span>` +
-    `<span class="aux">${bgButton(im)}<button class="rate hide" data-r="hide" title="скрыть: лишняя" ${dis}>${EYE_OFF}</button></span>` +
+    `<span class="aux">${bgButton(im)}<button class="hide" title="скрыть, чтобы не занимала место" ${dis}>${EYE_OFF}</button></span>` +
     pick(on, dis) + `</div>` +
     `<div class="pic" style="${bgStyle(im)}"><img loading="lazy" src="${src(im)}" alt="${esc(im.label || im.name)}"></div>` +
     `<textarea class="cmt" rows="1" placeholder="комментарий" ${dis}>${esc(text)}</textarea></div>`;
@@ -295,16 +296,10 @@ function later(key, fn){ clearTimeout(timers[key]); timers[key] = setTimeout(fn,
 function imOf(k){ const [g, n] = k.split(".").map(Number); return cur.groups[g].images[n]; }
 
 function rate(im, r){
-  const was = im.rating;
   im.rating = im.rating === r ? null : r;
   api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, rating: im.rating});
   const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
-  if (c && (was === "hide" || im.rating === "hide")){
-    // Свернуть или развернуть: карточка собирается заново.
-    c.outerHTML = card(im, cur.state !== "ждёт");
-    flat = visible();
-    wireCards();
-  } else if (c){
+  if (c){
     c.classList.toggle("like", im.rating === "like");
     c.querySelectorAll(".rate").forEach((b) => {
       const on = b.dataset.r === im.rating;
@@ -312,8 +307,15 @@ function rate(im, r){
   }
   if (fullAt >= 0) showFull(fullAt);
 }
-// Листать на полном экране можно готовые и не скрытые картинки.
-const visible = () => cur.groups.flatMap((g) => g.images).filter((im) => im.ready && im.rating !== "hide");
+// Свернуть или развернуть: карточка собирается заново.
+function setHidden(im, hidden){
+  im.hidden = hidden;
+  api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, hidden});
+  const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
+  if (c){ c.outerHTML = card(im, cur.state !== "ждёт"); wireCards(); }
+}
+// На полном экране листаются все готовые картинки, и скрытые тоже.
+const visible = () => cur.groups.flatMap((g) => g.images).filter((im) => im.ready);
 
 function comment(im, text){
   im.comment = text; drafts[im.path] = text;
@@ -329,6 +331,8 @@ function wireCards(){
   document.querySelectorAll(".card .bgsw").forEach((b) => b.onclick = () => nextBg(imOf(b.closest(".card").dataset.k)));
   if (locked) return;
   document.querySelectorAll(".card .rate").forEach((b) => b.onclick = () => rate(imOf(b.closest(".card").dataset.k), b.dataset.r));
+  document.querySelectorAll(".card .hide").forEach((b) => b.onclick = () => setHidden(imOf(b.closest(".card").dataset.k), true));
+  document.querySelectorAll(".card .unhide").forEach((b) => b.onclick = () => setHidden(imOf(b.closest(".card").dataset.k), false));
   document.querySelectorAll(".card .cmt").forEach((t) => t.oninput = () => comment(imOf(t.closest(".card").dataset.k), t.value));
 }
 
