@@ -88,6 +88,20 @@ try:
 except OSError:
     log.info("Another instance holds port 47811, exiting")
     sys.exit("Already running")
+_guard.listen(8)
+
+
+def _answer_knock():
+    # Пульт проверяет, жива ли диктовка, стуком в этот порт: раньше он
+    # каждые пять секунд запускал pwsh с WMI-запросом по всем процессам.
+    while True:
+        try:
+            _guard.accept()[0].close()
+        except OSError:
+            return
+
+
+threading.Thread(target=_answer_knock, daemon=True).start()
 
 log.info("Loading model %s", MODEL)
 

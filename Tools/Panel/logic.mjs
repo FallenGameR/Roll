@@ -56,15 +56,21 @@ async function processes() {
 
 // Голый TCP вместо fetch: undici падал с assert на ответах этого сервера
 // и ронял процесс расширения целиком.
-function winampUp() {
+function portUp(port) {
     return new Promise((resolve) => {
-        const socket = connect({ host: "127.0.0.1", port: WINAMP_PORT });
+        const socket = connect({ host: "127.0.0.1", port });
         const done = (ok) => { socket.destroy(); resolve(ok); };
         socket.setTimeout(1500, () => done(false));
         socket.once("connect", () => done(true));
         socket.once("error", () => done(false));
     });
 }
+const winampUp = () => portUp(WINAMP_PORT);
+// ptt.py держит этот порт, чтобы не запуститься дважды, и отвечает на стук.
+// Опрос статуса раз в пять секунд идёт стуком, а не processes(): тот
+// запускает pwsh с WMI-запросом и заметно грузит процессор.
+const DICTATION_PORT = 47811;
+const dictationUp = () => portUp(DICTATION_PORT);
 
 async function clearedAt() {
     try { return (await readFile(CLEARED, "utf8")).trim(); } catch { return ""; }
@@ -129,9 +135,9 @@ export async function clearPhrases() {
 }
 
 export async function status() {
-    const [list, winamp, last] = await Promise.all([processes(), winampUp(), phrases(1)]);
+    const [dictation, winamp, last] = await Promise.all([dictationUp(), winampUp(), phrases(1)]);
     return {
-        dictation: list.some((p) => /ptt\.py/.test(p.CommandLine)),
+        dictation,
         winamp,
         winampUrl: WINAMP_URL,
         // По метке последней фразы страница понимает, что пора обновить журнал.
