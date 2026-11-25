@@ -54,3 +54,8 @@
 .leaflet-container.mmt-on .leaflet-marker-icon.leaflet-marker-draggable {
   cursor: move;
 }
+
+/* Светлая карта при тёмной теме: снимаем фильтр Map View с тайлов. */
+.leaflet-container.mmt-light .dark-mode {
+  filter: none !important;
+}

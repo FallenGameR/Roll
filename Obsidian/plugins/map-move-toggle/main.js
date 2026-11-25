@@ -17,7 +17,8 @@
   createMap (кнопка возвращается на новую карту).
 */
 
-const { Plugin, Notice } = require("obsidian");
+const { Plugin, Notice, setIcon } = require("obsidian");
+const LIGHT_KEY = "mmt-light-map";
 
 const PATCHED = Symbol("map-move-toggle");
 const ON = Symbol("map-move-toggle-on");
@@ -112,6 +113,50 @@ module.exports = class MapMoveToggle extends Plugin {
     container._mmtButton = button;
     this.paintButton(container);
     this.register(() => bar.remove());
+    this.addLightButton(container, corner);
+  }
+
+  /*
+    Светлая карта при тёмной теме. Map View в тёмной теме не берёт другие
+    тайлы, а перекрашивает светлые CSS-фильтром на слое с классом dark-mode.
+    Кнопка снимает этот фильтр классом на контейнере карты, без пересборки
+    карты. Выбор общий для всех карт и запоминается в localStorage.
+  */
+  addLightButton(container, corner) {
+    const bar = corner.createDiv({ cls: "leaflet-bar leaflet-control mmt-light-control" });
+    const button = bar.createEl("a", { cls: "mmt-button mmt-light-button", href: "#" });
+    for (const type of ["mousedown", "touchstart", "pointerdown", "dblclick", "contextmenu", "wheel"]) {
+      button.addEventListener(type, (e) => e.stopPropagation());
+    }
+    button.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.localStorage.setItem(LIGHT_KEY, this.isLight() ? "0" : "1");
+      this.paintLightAll();
+    });
+    container._mmtLightButton = button;
+    this.paintLight(container);
+    this.register(() => bar.remove());
+  }
+
+  isLight() {
+    return window.localStorage.getItem(LIGHT_KEY) === "1";
+  }
+
+  paintLight(container) {
+    const light = this.isLight();
+    container.display?.map?.getContainer().toggleClass("mmt-light", light);
+    const button = container._mmtLightButton;
+    if (!button) return;
+    setIcon(button, light ? "moon" : "sun");
+    const label = light ? "Карта как в тёмной теме" : "Светлая карта";
+    button.setAttr("aria-label", label);
+    button.setAttr("title", label);
+  }
+
+  paintLightAll() {
+    const mapView = this.app.plugins.plugins["obsidian-map-view"];
+    for (const container of mapView?.allMapContainers || []) this.paintLight(container);
   }
 
   paintButton(container) {
