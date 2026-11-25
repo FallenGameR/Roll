@@ -1,0 +1,56 @@
+/* Leaflet на :hover ставит кнопке display:block и 26px, и значок прыгает. Держим одно и то же. */
+.leaflet-bar .mmt-button,
+.leaflet-bar .mmt-button:hover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  line-height: 30px;
+  color: #333;
+  --mmt-hole: #fff;
+}
+
+.leaflet-bar .mmt-button:hover {
+  --mmt-hole: #f4f4f4;
+}
+
+.mmt-control .mmt-button svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: block;
+}
+
+/* Включено: кнопка горит и пульсирует, чтобы режим нельзя было не заметить. */
+.leaflet-bar .mmt-button.is-on,
+.leaflet-bar .mmt-button.is-on:hover {
+  background: #ffc21a;
+  color: #1e1e1e;
+  --mmt-hole: #ffc21a;
+  animation: mmt-pulse 1.4s ease-in-out infinite;
+}
+
+.mmt-control:has(.mmt-button.is-on) {
+  border-color: #ffc21a;
+}
+
+@keyframes mmt-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px 1px rgba(255, 194, 26, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 14px 5px rgba(255, 194, 26, 0.95);
+  }
+}
+
+/* Пока режим включён, рамка карты тоже светится, а маркеры видно, что их можно тащить. */
+.leaflet-container.mmt-on {
+  outline: 3px solid #ffc21a;
+  outline-offset: -3px;
+}
+
+.leaflet-container.mmt-on .leaflet-marker-icon.leaflet-marker-draggable {
+  cursor: move;
+}

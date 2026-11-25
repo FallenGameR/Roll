@@ -1,0 +1,9 @@
+{
+  "id": "alt-drag-markers",
+  "name": "Маркеры карты по Alt",
+  "version": "1.0.0",
+  "minAppVersion": "1.9.0",
+  "description": "Зажми Alt и тащи маркер Map View: новое место пишется в свойство location заметки.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": true
+}

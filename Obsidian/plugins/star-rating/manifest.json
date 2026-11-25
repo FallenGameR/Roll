@@ -1,0 +1,9 @@
+{
+  "id": "star-rating",
+  "name": "Звёздный рейтинг",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Поле Meta Bind с классом stars показывается пятью кликабельными звёздами вместо выпадающего списка.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

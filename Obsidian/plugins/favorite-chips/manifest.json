@@ -1,0 +1,9 @@
+{
+  "id": "favorite-chips",
+  "name": "Чипы избранного",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Строчное поле `FAVORITES`: чипы с именами путешественников, клик добавляет или убирает имя в свойстве favorites.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

@@ -52,7 +52,7 @@ function Install-ObsidianKit {
     param(
         [Parameter(Mandatory)]
         [string] $Vault,
-        [ValidateSet('base', 'dnd', 'phandelver')]
+        [ValidateSet('base', 'dnd', 'phandelver', 'map', 'travel')]
         [string[]] $Kit = @('base'),
         [string[]] $Name,
         [switch] $Force

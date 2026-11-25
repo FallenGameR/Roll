@@ -18,7 +18,7 @@ ttrpg-convert-cli, `background.css` с форума) сюда не кладут�
 волтах, куда их положил их генератор.
 
 Команды: `Get-ObsidianKit [-Kit] [-Vault]` - каталог и что из него стоит в
-волте; `Install-ObsidianKit -Vault <волт> [-Kit base,dnd,phandelver]
+волте; `Install-ObsidianKit -Vault <волт> [-Kit base,dnd,phandelver,map,travel]
 [-Name <id>] [-WhatIf] [-Force]` - поставить и включить.
 
 ## Правка идёт в Roll, в волт её ставит установщик
@@ -76,7 +76,9 @@ Roll принадлежит сессии `roll`. Другая сессия (на
 - `base` - в любом волте;
 - `dnd` - в волте с Initiative Tracker и Fantasy Statblocks, разложенном
   как Рудники Фанделвера (`Adventure/Players` и прочее);
-- `phandelver` - завязано на конкретные страницы кампании.
+- `phandelver` - завязано на конкретные страницы кампании;
+- `map` - в волте с картой Map View и полями Meta Bind;
+- `travel` - завязано на поля и путешественников волта Travel.
 
 В `needs` пишутся id чужих плагинов, без которых наш не работает:
 установщик их не ставит, но предупреждает, если их в волте нет.

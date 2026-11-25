@@ -2,7 +2,9 @@
   "kits": {
     "base": "Любой волт: свойства свёрнуты и не мешают, callout'ы в рамке.",
     "dnd": "Волт с Initiative Tracker и Fantasy Statblocks, разложенный как Рудники Фанделвера.",
-    "phandelver": "Завязано на страницы и папки кампании Рудники Фанделвера."
+    "phandelver": "Завязано на страницы и папки кампании Рудники Фанделвера.",
+    "map": "Волт с картой Map View и полями Meta Bind.",
+    "travel": "Завязано на поля и путешественников волта Travel."
   },
   "plugins": [
     { "id": "fold-properties-always", "kit": "base", "needs": [] },
@@ -13,7 +15,13 @@
     { "id": "timeline-links", "kit": "dnd", "needs": ["simple-timeline"] },
     { "id": "battlemap-links", "kit": "phandelver", "needs": ["initiative-tracker", "obsidian-excalidraw-plugin"] },
     { "id": "chase-tracker", "kit": "phandelver", "needs": ["initiative-tracker"] },
-    { "id": "xge-difficulty", "kit": "phandelver", "needs": ["initiative-tracker"] }
+    { "id": "xge-difficulty", "kit": "phandelver", "needs": ["initiative-tracker"] },
+    { "id": "star-rating", "kit": "map", "needs": ["obsidian-meta-bind-plugin"] },
+    { "id": "map-preview-fields", "kit": "map", "needs": ["obsidian-map-view", "obsidian-meta-bind-plugin"] },
+    { "id": "map-move-toggle", "kit": "map", "needs": ["obsidian-map-view"] },
+    { "id": "alt-drag-markers", "kit": "map", "needs": ["obsidian-map-view"] },
+    { "id": "map-place-markers", "kit": "travel", "needs": ["obsidian-map-view"] },
+    { "id": "favorite-chips", "kit": "travel", "needs": [] }
   ],
   "snippets": [
     { "name": "hide-all-properties-tab", "kit": "base", "needs": [],
@@ -22,6 +30,8 @@
       "description": "Убирает пустой блок свойств во всплывающем предпросмотре; пара к fold-properties-always." },
     { "name": "fix-callout-boxes", "kit": "base", "needs": [],
       "description": "Постоянная рамка, фон и шапка у стандартных callout'ов, в том числе в Live Preview." },
+    { "name": "wide-bases-filter", "kit": "base", "needs": [],
+      "description": "Широкое окно фильтра Bases, чтобы имена свойств не обрезались." },
     { "name": "fix-statblock-bold-contrast", "kit": "dnd", "needs": ["obsidian-5e-statblocks"],
       "description": "Жирный текст в статблоке читается на светлом фоне при тёмной теме." },
     { "name": "statblock-live-preview", "kit": "dnd", "needs": ["obsidian-5e-statblocks"],

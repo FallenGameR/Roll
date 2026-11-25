@@ -1,0 +1,35 @@
+.favorite-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.favorite-chip {
+  padding: 0 7px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.favorite-chip:hover {
+  border-color: #ffc21a;
+}
+
+.favorite-chip.is-chosen {
+  background: #ffc21a;
+  border-color: #ffc21a;
+  color: #1e1e1e;
+  font-weight: 600;
+}
+
+/* Отметка «были»: выбранная зелёная, не золотая, чтобы не путать с фаворитами. */
+.favorite-chip.visited-chip.is-chosen {
+  background: #3c9a5f;
+  border-color: #3c9a5f;
+  color: #fff;
+}

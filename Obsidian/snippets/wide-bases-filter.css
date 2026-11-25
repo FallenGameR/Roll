@@ -1,0 +1,5 @@
+/* Wider Bases filter popup so property names are not truncated */
+.menu.bases-toolbar-filter-menu { width: min(860px, 90vw) !important; max-width: 90vw !important; }
+.bases-toolbar-filter-menu .filter-expression .metadata-property-key,
+.bases-toolbar-filter-menu .filter-expression > :nth-child(1),
+.bases-toolbar-filter-menu .filter-expression > :nth-child(2) { flex-shrink: 0 !important; min-width: max-content !important; }

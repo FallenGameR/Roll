@@ -1,0 +1,39 @@
+/* Выпадающий список Meta Bind спрятан, вместо него пять звёзд. */
+.mb-input-wrapper.star-rating-active select {
+  display: none;
+}
+
+.star-rating {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 1.3em;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+}
+
+.star-rating-star {
+  color: transparent;
+  -webkit-text-stroke: 1.5px #8a8a8a;
+  transition: color 0.08s, -webkit-text-stroke-color 0.08s, transform 0.08s;
+}
+
+.star-rating-star.is-filled {
+  color: #ffc21a;
+  -webkit-text-stroke-color: #ffc21a;
+}
+
+.star-rating.is-preview .star-rating-star.is-filled {
+  color: #ffd95e;
+  -webkit-text-stroke-color: #ffd95e;
+}
+
+.star-rating-star:hover {
+  transform: scale(1.15);
+}
+
+/* Ещё не оценено: контур бледнее, чтобы не путать с нулём. */
+.star-rating.is-unrated:not(.is-preview) .star-rating-star {
+  -webkit-text-stroke-color: #5a5a5a;
+}

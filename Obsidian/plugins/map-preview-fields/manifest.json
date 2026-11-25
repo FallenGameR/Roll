@@ -1,0 +1,9 @@
+{
+  "id": "map-preview-fields",
+  "name": "Поля в предпросмотре карты",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Поля Meta Bind (звёзды и прочие INPUT) работают в предпросмотре заметки на карте Map View.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

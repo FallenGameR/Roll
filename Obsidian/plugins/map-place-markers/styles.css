@@ -1,0 +1,116 @@
+/* Плашка со звёздами вместо круглого бейджа Map View: над маркером, по центру. */
+.mv-badge:has(.mpm-stars) {
+  width: auto;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  top: -9px;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translateX(-50%);
+  align-items: center;
+  white-space: nowrap;
+}
+
+.mpm-stars {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+/* Плашка с ценой: под остриём маркера, по центру. */
+.mv-badge:has(.mpm-cost) {
+  width: auto;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  top: auto;
+  bottom: -15px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  align-items: center;
+  white-space: nowrap;
+}
+
+.mpm-cost {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.mpm-stars-0 {
+  color: #9a9a9a;
+}
+
+/* Золотая окантовка у мест из favorites: обводка повторяет форму маркера. */
+.leaflet-marker-icon.mpm-favorite {
+  filter: drop-shadow(0 0 1px #ffd23f) drop-shadow(0 0 1px #ffd23f) drop-shadow(0 0 2px #ffb000);
+}
+
+/*
+  Значок внутри маркера Leaflet Extra Markers ставит по центру рамки 35x45,
+  а сама капля в спрайте сдвинута: её ось примерно на 1px правее, центр головы на
+  1.9px ниже. Замерено на увеличенном маркере, ось проходит через острие.
+*/
+.leaflet-marker-icon.extra-marker > svg.svg-inline--fa {
+  transform: translate(1px, 1.9px);
+}
+
+/* Подпись Leaflet в правом нижнем углу карты не нужна. */
+.leaflet-control-attribution {
+  display: none;
+}
+
+/* Панель Edit слева сверху и кнопка режима правки (рисование геоданных) не нужны. */
+.map-view-graph-controls,
+.leaflet-bar:has(> a.mv-icon-button[title="Edit Mode"]) {
+  display: none !important;
+}
+
+/* Плашка со временем на месте: справа от головы маркера. */
+.mv-badge:has(.mpm-dur) {
+  width: auto;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  top: 9px;
+  bottom: auto;
+  left: 29px;
+  right: auto;
+  transform: none;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.mpm-dur {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+/* Уже были: маркер серый и бледный, плашки тоже. Фаворит сохраняет золотую обводку. */
+.leaflet-marker-icon.mpm-visited {
+  filter: grayscale(1) brightness(0.85);
+  opacity: 0.6 !important;
+}
+
+.leaflet-marker-icon.mpm-visited.mpm-favorite {
+  filter: grayscale(1) brightness(0.85) drop-shadow(0 0 1px #ffd23f) drop-shadow(0 0 2px #ffb000);
+}
+
+.leaflet-marker-icon.mpm-visited::after {
+  content: "✓";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #555;
+  color: #fff;
+  font: 700 16px/24px sans-serif;
+  text-align: center;
+}

@@ -1,0 +1,12 @@
+/*
+  Попап Map View выше, чтобы под строкой «Maps, звёзды, фавориты» целиком
+  влезала первая картинка. Высоту держит внутренний блок попапа (у Map View
+  там жёстко 300px), контейнер вокруг него только ограничивает сверху.
+*/
+.mv-marker-popup-container {
+  max-height: min(34em, 85vh);
+}
+
+.mv-marker-popup-container .mv-marker-popup-internal.with-content {
+  height: min(430px, 55vh);
+}

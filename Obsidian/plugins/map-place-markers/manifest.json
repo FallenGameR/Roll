@@ -1,0 +1,9 @@
+{
+  "id": "map-place-markers",
+  "name": "Маркеры мест на карте",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Маркеры Map View рисуются из шапки заметки: звёзды из stars над маркером, золотая окантовка, если favorites не пуст.",
+  "author": "Архивариус Бард",
+  "isDesktopOnly": false
+}

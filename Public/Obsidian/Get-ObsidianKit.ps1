@@ -29,7 +29,7 @@
 function Get-ObsidianKit {
     [CmdletBinding()]
     param(
-        [ValidateSet('base', 'dnd', 'phandelver')]
+        [ValidateSet('base', 'dnd', 'phandelver', 'map', 'travel')]
         [string[]] $Kit,
         [string] $Vault
     )
