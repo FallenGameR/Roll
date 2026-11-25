@@ -2,66 +2,95 @@
 <html lang="ru"><head><meta charset="utf-8"><title>Сравнение картинок</title>
 <style>
   :root { --status-bar-color: var(--background-color-default, #ffffff);
-          --frame: #d8d4cc; --like: #6f8f68; --like-bg: rgba(111,143,104,.16);
-          --dislike: #b07a6e; --dislike-bg: rgba(176,122,110,.16); --muted: var(--text-color-muted, #666); }
+          --frame: #d8d4cc; --edge: rgba(0,0,0,.12); --like: #6f8f68; --muted: var(--text-color-muted, #666); }
   :root[data-color-mode="dark"], :root[data-theme-tone="dark"] {
-          --frame: #3b3631; --like: #9fbd97; --like-bg: rgba(159,189,151,.14);
-          --dislike: #d4a397; --dislike-bg: rgba(212,163,151,.14); }
+          --frame: #3b3631; --edge: rgba(255,255,255,.12); --like: #9fbd97; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-color-mode]):not([data-theme-tone]) {
-          --frame: #3b3631; --like: #9fbd97; --like-bg: rgba(159,189,151,.14);
-          --dislike: #d4a397; --dislike-bg: rgba(212,163,151,.14); }
+          --frame: #3b3631; --edge: rgba(255,255,255,.12); --like: #9fbd97; }
   }
   html, body { height: 100%; }
   body { margin: 0; display: flex; flex-direction: column;
          background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
          font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 14px; line-height: 20px; }
-  header { padding: 10px 16px; border-bottom: 1px solid var(--frame); display: flex; align-items: center;
-           gap: 14px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; flex: 1 1 auto; overflow-wrap: anywhere; }
-  .seg { display: inline-flex; border: 1px solid var(--frame); border-radius: 6px; overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12px; }
-  .seg button.on { background: var(--frame); }
-  .count { color: var(--muted); font-size: 13px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--background-color-default, #fff);
+           padding: 10px 16px 8px; border-bottom: 1px solid var(--frame); }
+  .top { display: flex; align-items: center; gap: 14px; }
+  h1 { margin: 0; font-size: 18px; line-height: 24px; font-weight: 600; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .top > :not(h1) { flex: none; }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 4px 7px; line-height: 0; color: var(--muted); }
+  .seg button svg { width: 18px; height: 14px; fill: currentColor; }
+  .seg button.on { background: var(--edge); color: inherit; }
   button { font: inherit; padding: 4px 12px; border-radius: 6px; cursor: pointer;
            border: 1px solid var(--frame); background: transparent; color: inherit; }
   button:disabled, textarea:disabled, input:disabled { opacity: .55; cursor: default; }
-  button.send { border-color: var(--like); color: var(--like); }
+  button.send { font-weight: 600; }
   main { flex: 1; overflow: auto; padding: 8px 16px 32px; }
   section { margin: 14px 0 22px; }
   h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
   .note { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-  textarea { font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; resize: vertical;
-             min-height: 30px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--frame);
-             background: transparent; color: inherit; }
-  .grid { display: grid; gap: 14px; margin-top: 8px; }
+  /* Поле в одну строку высотой с текст; растёт, только когда в нём пишут
+     (field-sizing, а где его нет - autosize() в скрипте). */
+  textarea { font: inherit; font-size: 13px; line-height: 18px; width: 100%; box-sizing: border-box; resize: none;
+             overflow: hidden; field-sizing: content; min-height: 0; height: auto; padding: 5px 10px;
+             border-radius: 6px; border: 1px solid var(--edge); background: transparent; color: inherit; }
+  textarea:focus { outline: none; border-color: var(--like); }
+  .grid { display: grid; gap: 16px; margin-top: 10px; align-items: start; }
   .grid.c1 { grid-template-columns: 1fr; }
   .grid.c2 { grid-template-columns: 1fr 1fr; }
-  .card { border: 2px solid var(--frame); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
-  .card.like { border-color: var(--like); }
-  .card.dislike { border-color: var(--dislike); }
-  /* Фон под картинками задаёт отдельный <style id="bgstyle">, а не класс на
-     body: хост переписывает классы body своими, и класс фона пропадал. */
+  .card { border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
+          box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.07); transition: box-shadow .15s, border-color .15s; }
+  .card.like { }
+  /* Фон под картинкой - инлайн-стилем у самой .pic, а не классом на body:
+     хост переписывает классы body своими. Переключатель есть только у
+     картинок с прозрачностью. */
   .pic { cursor: zoom-in; display: flex; align-items: center; justify-content: center; max-height: 78vh; }
   .pic img { max-width: 100%; max-height: 78vh; display: block; }
-  .bar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; }
-  .card > .bar { border-bottom: 1px solid var(--frame); }
-  .bar .name { color: var(--muted); font-size: 12px; margin-right: auto; overflow: hidden;
-               text-overflow: ellipsis; white-space: nowrap; }
-  .rate.like.on { background: var(--like-bg); border-color: var(--like); color: var(--like); }
-  .rate.dislike.on { background: var(--dislike-bg); border-color: var(--dislike); color: var(--dislike); }
-  .card textarea { border: 0; border-top: 1px solid var(--frame); border-radius: 0; min-height: 34px; }
-  #full { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; }
+  .bar { display: flex; gap: 8px; align-items: center; padding: 6px 8px; }
+  .card > .bar { border-bottom: 1px solid var(--edge); }
+  .bar .name { font-size: 14px; font-weight: 600; margin-right: auto; overflow-wrap: anywhere; line-height: 18px; }
+  .bar .name small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .bgsw { width: 16px; height: 16px; padding: 0; border-radius: 4px; border: 1px solid var(--edge);
+          margin-right: 6px; opacity: .55; transition: opacity .15s; }
+  .bgsw:hover { opacity: 1; }
+  .bgsw + .pick { padding-left: 12px; border-left: 1px solid var(--edge); border-radius: 0; }
+  .pick { border: 0; padding: 2px; line-height: 0; color: var(--muted); }
+  .pick svg { width: 26px; height: 26px; transition: transform .12s; }
+  .pick .ring { fill: none; stroke: currentColor; stroke-width: 1.4; opacity: .7; }
+  .pick .tick { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+  .pick:hover:not(:disabled) .tick { opacity: .45; }
+  .pick.on { color: var(--like); }
+  .pick.on .ring { fill: var(--like); stroke: var(--like); opacity: 1; }
+  .pick.on .tick { stroke: #fff; opacity: 1; }
+  .card textarea { border: 0; border-top: 1px solid var(--edge); border-radius: 0; padding: 7px 10px; }
+  .card textarea:focus { background: rgba(127,127,127,.06); }
+  #full { position: fixed; inset: 0; z-index: 10; display: none; flex-direction: column; background: #141414; }
   #full.open { display: flex; }
   #full .stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; cursor: zoom-out; }
   #full img { max-width: 100%; max-height: 100%; }
   #full .bar { background: rgba(20,20,20,.88); color: #eee; padding: 8px 12px; }
-  #full .bar .name { color: #bbb; font-size: 13px; }
+  #full .bar .name { color: #eee; }
+  #full .pick:not(.on) { color: #bbb; }
   #full button { color: #eee; border-color: #555; }
-  #full textarea { background: rgba(255,255,255,.06); color: #eee; border-color: #555; width: 40%; min-height: 30px; }
+  #full textarea { background: rgba(255,255,255,.06); color: #eee; border-color: #555; width: 40%; }
   .idle { color: var(--muted); padding: 20px 16px; }
   .sent { color: var(--like); font-size: 13px; }
-</style><style id="bgstyle"></style></head>
+  .prog { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .prog[hidden] { display: none; }
+  .track { flex: 1; height: 10px; border-radius: 5px; background: var(--frame); overflow: hidden; position: relative; }
+  .fill { height: 100%; background: var(--like); border-radius: 5px; transition: width .6s ease; }
+  .track .run { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--like); opacity: .35;
+                animation: breathe 1.6s ease-in-out infinite; transition: left .6s ease, width .6s ease; }
+  .ptext { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ptext small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .card.pending { border-style: dashed; box-shadow: none; }
+  .slot { min-height: 220px; display: flex; align-items: center; justify-content: center;
+          color: var(--muted); font-size: 15px; letter-spacing: .03em; }
+  .slot.drawing { color: var(--text-color-default, #1f2328);
+                  animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { opacity: .45; } }
+</style></head>
 <body>
 <div id="root" style="display:contents"><div class="idle">Загружаю…</div></div>
 <div id="full">
@@ -70,8 +99,9 @@
     <button id="fprev" title="предыдущая (←)">←</button>
     <button id="fnext" title="следующая (→)">→</button>
     <span class="name" id="fname"></span>
-    <button class="rate like" data-r="like">нравится</button>
-    <textarea id="fcomment" placeholder="комментарий"></textarea>
+    <span id="fbgs" style="display:contents"></span>
+    <button class="rate pick" data-r="like" title="нравится"></button>
+    <textarea id="fcomment" rows="1" placeholder="комментарий"></textarea>
     <button id="fclose" title="закрыть (Esc)">✕</button>
   </div>
 </div>
@@ -81,64 +111,168 @@ const ID = new URLSearchParams(location.search).get("i") || "default";
 const q = (p) => `/look${p}${p.includes("?") ? "&" : "?"}i=${encodeURIComponent(ID)}`;
 const api = (p, body) => fetch(q(p), {method: "POST", body: JSON.stringify(body ?? {})}).then((r) => r.json());
 
-let cur = null, shown = "", flat = [], fullAt = -1;
+let cur = null, flat = [], fullAt = -1;
 let cols = localStorage.getItem("look.cols") || (innerWidth >= 1100 ? "2" : "1");
-let bg = localStorage.getItem("look.bg") || "check";
+// Прозрачная картинка по умолчанию лежит на шахматке: так сразу видно, где
+// у неё прозрачность. Одна кнопка-образец перебирает фон по кругу, выбор
+// помнится по пути файла.
 const BACKGROUNDS = {
-  check: "background-color:#fff; background-image:conic-gradient(#cfcfcf 25%, #fff 0 50%, #cfcfcf 0 75%, #fff 0); background-size:24px 24px;",
+  check: "background-color:#fff; background-image:conic-gradient(#d6d6d6 25%, #fff 0 50%, #d6d6d6 0 75%, #fff 0); background-size:24px 24px;",
   dark: "background:#141414;",
   light: "background:#f4f1ea;",
 };
-function applyBg(){
-  document.getElementById("bgstyle").textContent = `.pic, #full { ${BACKGROUNDS[bg] || BACKGROUNDS.check} }`;
+const BG_ORDER = ["check", "dark", "light"];
+const BG_NAMES = { check: "шахматка", dark: "тёмный", light: "светлый" };
+let bgOf = {};
+try { bgOf = JSON.parse(localStorage.getItem("look.bgs") || "{}"); } catch { }
+const bgKey = (im) => (im.path || "").toLowerCase();
+const bgOfIm = (im) => bgOf[bgKey(im)] || "check";
+const bgStyle = (im) => im.alpha ? BACKGROUNDS[bgOfIm(im)] : "";
+function bgButton(im){
+  if (!im.alpha) return "";
+  const b = bgOfIm(im);
+  return `<button class="bgsw" title="фон: ${BG_NAMES[b]} (щёлкни, чтобы сменить)" style="${BACKGROUNDS[b]} background-size:8px 8px;"></button>`;
 }
-applyBg();
+function nextBg(im){
+  const b = BG_ORDER[(BG_ORDER.indexOf(bgOfIm(im)) + 1) % BG_ORDER.length];
+  bgOf[bgKey(im)] = b; localStorage.setItem("look.bgs", JSON.stringify(bgOf));
+  const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
+  if (c){
+    c.querySelector(".pic").style.cssText = bgStyle(im);
+    c.querySelector(".bgsw").outerHTML = bgButton(im);
+    c.querySelector(".bgsw").onclick = () => nextBg(im);
+  }
+  if (fullAt >= 0) showFull(fullAt);
+}
+// Отметка «нравится» - кружок с галочкой: пустой контур или заливка
+// шалфейным, тем же цветом, что полоса прогресса.
+const PICK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="10"/><path class="tick" d="M7.2 12.4l3.2 3.2 6.4-6.8"/></svg>`;
+function pick(on, dis){
+  return `<button class="rate pick${on ? " on" : ""}" data-r="like" title="${on ? "нравится (снять)" : "нравится"}" aria-pressed="${on}" ${dis}>${PICK}</button>`;
+}
+// Подпись - label от сессии; без него имя файла без расширения.
+function caption(im){
+  return esc(im.label || im.name.replace(/\.[^.]+$/, ""));
+}
 
+// Опрос раз в 1.5 с. Весь круг перерисовывается, только когда поменялся
+// его состав (propose, add); готовность кадров и прогресс патчатся на месте,
+// чтобы не сбивать набор комментария. Набранный текст держится в drafts и
+// при перерисовке берётся оттуда, а не с сервера.
+let structure = "", drafts = {}, progressAt = null, clockSkew = 0;
 async function poll(){
   try {
     const s = await api("/state");
-    const stamp = JSON.stringify([s.rid, s.state]);
-    if (stamp !== shown){ shown = stamp; cur = s; render(); }
+    clockSkew = s.now ? s.now - Date.now() : 0;
+    const stamp = JSON.stringify([s.rid, s.state, (s.groups || []).map((g) => g.images.map((im) => [im.path, im.label]))]);
+    if (stamp !== structure){ structure = stamp; cur = s; render(); return; }
+    const was = cur; cur = s;
+    flat = cur.groups.flatMap((g) => g.images).filter((im) => im.ready);
+    for (const g of cur.groups) for (const im of g.images){
+      const old = was.groups[im.gi]?.images[im.ii];
+      if (!old || old.ready !== im.ready || old.v !== im.v) patchCard(im);
+    }
+    showProgress();
   } catch(e){ }
 }
 
-function src(im){ return q(`/img?g=${im.gi}&n=${im.ii}`) + "&v=" + cur.rid; }
+function src(im){ return q(`/img?g=${im.gi}&n=${im.ii}`) + "&v=" + im.v; }
+
+// Первый недорисованный кадр круга - «рисуется», остальные - «в очереди».
+function firstPending(){
+  for (const g of cur.groups) for (const im of g.images) if (!im.ready) return im;
+  return null;
+}
 
 function card(im, locked){
+  const key = `${im.gi}.${im.ii}`;
+  if (!im.ready){
+    const now = firstPending() === im;
+    return `<div class="card pending" data-k="${key}">` +
+      `<div class="bar"><span class="name">${caption(im)}</span></div>` +
+      `<div class="slot${now ? " drawing" : ""}">${now ? "рисуется…" : "в очереди"}</div></div>`;
+  }
   const dis = locked ? "disabled" : "";
-  // Оценка одна, «нравится»: повторный клик её снимает. Название и кнопка
-  // над картинкой, комментарий под ней.
-  return `<div class="card${im.rating === "like" ? " like" : ""}" data-k="${im.gi}.${im.ii}">` +
-    `<div class="bar"><span class="name" title="${esc(im.name)}">${esc(im.name)}</span>` +
-    `<button class="rate like${im.rating === "like" ? " on" : ""}" data-r="like" ${dis}>нравится</button></div>` +
-    `<div class="pic"><img loading="lazy" src="${src(im)}" alt="${esc(im.name)}"></div>` +
-    `<textarea class="cmt" placeholder="комментарий к картинке" ${dis}>${esc(im.comment || "")}</textarea></div>`;
+  const text = drafts[im.path] ?? im.comment ?? "";
+  // Оценка одна, «нравится»: повторный клик её снимает. Подпись, фон и
+  // галочка над картинкой, комментарий под ней.
+  const on = im.rating === "like";
+  return `<div class="card${on ? " like" : ""}" data-k="${key}">` +
+    `<div class="bar"><span class="name">${caption(im)}</span>` +
+    bgButton(im) + pick(on, dis) + `</div>` +
+    `<div class="pic" style="${bgStyle(im)}"><img loading="lazy" src="${src(im)}" alt="${esc(im.label || im.name)}"></div>` +
+    `<textarea class="cmt" rows="1" placeholder="комментарий" ${dis}>${esc(text)}</textarea></div>`;
 }
 
-function count(){
-  const rated = flat.filter((im) => im.rating === "like").length;
-  const el = document.getElementById("count");
-  if (el) el.textContent = `нравится ${rated} из ${flat.length}`;
+function patchCard(im){
+  const el = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
+  if (!el) return;
+  el.outerHTML = card(im, cur.state !== "ждёт");
+  // Заглушка «рисуется» переезжает на следующий кадр.
+  const next = firstPending();
+  if (next && next !== im) document.querySelectorAll(".card.pending .slot").forEach((s) => {
+    const k = s.closest(".card").dataset.k, mine = k === `${next.gi}.${next.ii}`;
+    s.classList.toggle("drawing", mine); s.textContent = mine ? "рисуется…" : "в очереди";
+  });
+  wireCards();
 }
+
+
+const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+// Полоса прогресса под шапкой: сплошная часть - готовые кадры, бледная
+// пульсирующая - кадр, который рисуется сейчас. Видна, пока круг не
+// дорисован или пока сессия держит progress.
+function showProgress(){
+  const el = document.getElementById("progress");
+  if (!el || !cur) return;
+  const p = cur.progress;
+  const done = p ? p.done : cur.ready, total = p ? p.total : cur.total;
+  if ((!p && done >= total) || !total){ el.hidden = true; return; }
+  const share = Math.min(1, done / total);
+  el.querySelector(".fill").style.width = `${share * 100}%`;
+  const run = el.querySelector(".run");
+  run.style.left = `${share * 100}%`; run.style.width = done < total ? `${100 / total}%` : "0";
+  let text = done >= total ? `готово, ${total} из ${total}` : `готово ${done} из ${total}`;
+  let small = "";
+  if (p && p.until && done < total){
+    const left = Math.round((p.until - (Date.now() + clockSkew)) / 1000);
+    small = left > 0 ? `осталось ~${mmss(left)}` : "вот-вот";
+  }
+  if (p && p.note) small += (small ? " · " : "") + p.note;
+  el.querySelector(".ptext").innerHTML = esc(text) + (small ? `<small>${esc(small)}</small>` : "");
+  el.hidden = false;
+}
+setInterval(showProgress, 1000);
 
 function render(){
   const root = document.getElementById("root");
   if (!cur || !cur.rid){ root.innerHTML = `<div class="idle">Круга пока нет: сессия покажет здесь варианты картинок.</div>`; return; }
   const locked = cur.state !== "ждёт";
-  flat = cur.groups.flatMap((g) => g.images);
-  root.innerHTML = `<header><h1>${esc(cur.title)}</h1>` +
-    `<span class="seg" id="cols"><button data-v="1" class="${cols === "1" ? "on" : ""}">1 в ряд</button><button data-v="2" class="${cols === "2" ? "on" : ""}">2 в ряд</button></span>` +
-    `<span class="seg" id="bgs"><button data-v="check" class="${bg === "check" ? "on" : ""}">шахматка</button><button data-v="dark" class="${bg === "dark" ? "on" : ""}">тёмный</button><button data-v="light" class="${bg === "light" ? "on" : ""}">светлый</button></span>` +
-    `<span class="count" id="count"></span>` +
-    (locked ? `<span class="sent">отправлено</span>` : `<button class="send" id="send">Отправить</button>`) +
+  flat = cur.groups.flatMap((g) => g.images).filter((im) => im.ready);
+  const focus = document.activeElement?.matches?.("textarea") ? document.activeElement : null;
+  const fkey = focus && (focus.closest(".card")?.dataset.k ?? "g" + focus.closest("section")?.dataset.g);
+  const caret = focus?.selectionStart;
+  // Заголовок один: имя круга в шапке. Имена групп выводятся, только когда
+  // групп больше одной.
+  const many = cur.groups.length > 1;
+  root.innerHTML = `<header><div class="top"><h1>${esc(cur.title)}</h1>` +
+    `<span class="seg" id="cols"><button data-v="1" title="по одной" class="${cols === "1" ? "on" : ""}"><svg viewBox="0 0 18 14"><rect x="3" y="1" width="12" height="12" rx="1.5"/></svg></button>` +
+    `<button data-v="2" title="по две" class="${cols === "2" ? "on" : ""}"><svg viewBox="0 0 18 14"><rect x="0.5" y="2" width="8" height="10" rx="1.5"/><rect x="9.5" y="2" width="8" height="10" rx="1.5"/></svg></button></span>` +
+    (locked ? `<span class="sent">передано</span>` : `<button class="send" id="send" title="передать отметки и комментарии в сессию">Готово</button>`) +
+    `</div><div class="prog" id="progress" hidden><div class="track"><div class="fill"></div><div class="run"></div></div><span class="ptext"></span></div>` +
     `</header><main>` +
-    cur.groups.map((g, gi) => `<section data-g="${gi}"><h2>${esc(g.name)}</h2>` +
+    cur.groups.map((g, gi) => `<section data-g="${gi}">` + (many ? `<h2>${esc(g.name)}</h2>` : "") +
       (g.note ? `<div class="note">${esc(g.note)}</div>` : "") +
-      `<textarea class="gcmt" placeholder="общий комментарий к группе" ${locked ? "disabled" : ""}>${esc(g.comment)}</textarea>` +
+      `<textarea class="gcmt" rows="1" placeholder="комментарий серии" ${locked ? "disabled" : ""}>${esc(drafts["g:" + g.name] ?? g.comment)}</textarea>` +
       `<div class="grid c${cols}">${g.images.map((im) => card(im, locked)).join("")}</div></section>`).join("") +
     `</main>`;
-  count();
+  showProgress();
   wire(locked);
+  if (fkey){
+    const el = fkey.startsWith("g") ? document.querySelector(`section[data-g="${fkey.slice(1)}"] .gcmt`)
+                                    : document.querySelector(`.card[data-k="${fkey}"] .cmt`);
+    if (el){ el.focus(); if (caret != null) el.setSelectionRange(caret, caret); }
+  }
 }
 
 const timers = {};
@@ -150,40 +284,48 @@ function rate(im, r){
   api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, rating: im.rating});
   const c = document.querySelector(`.card[data-k="${im.gi}.${im.ii}"]`);
   if (c){
-    c.classList.remove("like", "dislike"); if (im.rating) c.classList.add(im.rating);
-    c.querySelectorAll(".rate").forEach((b) => b.classList.toggle("on", b.dataset.r === im.rating));
+    c.classList.toggle("like", im.rating === "like");
+    c.querySelectorAll(".rate").forEach((b) => {
+      const on = b.dataset.r === im.rating;
+      b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
   }
-  count();
   if (fullAt >= 0) showFull(fullAt);
 }
 
 function comment(im, text){
-  im.comment = text;
+  im.comment = text; drafts[im.path] = text;
   later(`${im.gi}.${im.ii}`, () => api("/mark", {rid: cur.rid, g: im.gi, n: im.ii, comment: text}));
+}
+
+// Обработчики карточек отдельно: patchCard заменяет одну карточку и
+// навешивает их заново, не трогая остальную страницу.
+function wireCards(){
+  const locked = cur.state !== "ждёт";
+  document.querySelectorAll(".pic").forEach((p) => p.onclick = () =>
+    openFull(flat.indexOf(imOf(p.closest(".card").dataset.k))));
+  document.querySelectorAll(".card .bgsw").forEach((b) => b.onclick = () => nextBg(imOf(b.closest(".card").dataset.k)));
+  if (locked) return;
+  document.querySelectorAll(".card .rate").forEach((b) => b.onclick = () => rate(imOf(b.closest(".card").dataset.k), b.dataset.r));
+  document.querySelectorAll(".card .cmt").forEach((t) => t.oninput = () => comment(imOf(t.closest(".card").dataset.k), t.value));
 }
 
 function wire(locked){
   document.querySelectorAll("#cols button").forEach((b) => b.onclick = () => {
     cols = b.dataset.v; localStorage.setItem("look.cols", cols); render(); });
-  document.querySelectorAll("#bgs button").forEach((b) => b.onclick = () => {
-    bg = b.dataset.v; localStorage.setItem("look.bg", bg); applyBg(); render(); });
-  document.querySelectorAll(".pic").forEach((p) => p.onclick = () =>
-    openFull(flat.indexOf(imOf(p.closest(".card").dataset.k))));
+  wireCards();
   if (locked) return;
-  document.querySelectorAll(".card .rate").forEach((b) => b.onclick = () => rate(imOf(b.closest(".card").dataset.k), b.dataset.r));
-  document.querySelectorAll(".card .cmt").forEach((t) => t.oninput = () => comment(imOf(t.closest(".card").dataset.k), t.value));
   document.querySelectorAll(".gcmt").forEach((t) => t.oninput = () => {
     const gi = +t.closest("section").dataset.g;
-    cur.groups[gi].comment = t.value;
+    cur.groups[gi].comment = t.value; drafts["g:" + cur.groups[gi].name] = t.value;
     later("g" + gi, () => api("/mark", {rid: cur.rid, g: gi, comment: t.value}));
   });
   document.getElementById("send").onclick = async (e) => {
     const left = flat.filter((im) => im.rating !== "like").length;
     if (left === flat.length && !confirm("Ни одна картинка не отмечена «нравится». Всё равно отправить?")) return;
-    e.target.disabled = true; e.target.textContent = "Отправляю…";
+    e.target.disabled = true; e.target.textContent = "Передаю…";
     await new Promise((r) => setTimeout(r, 400));
     await api("/submit", {rid: cur.rid});
-    shown = ""; poll();
+    structure = ""; poll();
   };
 }
 
@@ -193,8 +335,15 @@ function showFull(i){
   fullAt = (i + flat.length) % flat.length;
   const im = flat[fullAt], g = cur.groups[im.gi];
   fullImg.src = src(im);
-  document.getElementById("fname").textContent = `${g.name} · ${im.name} (${fullAt + 1}/${flat.length})`;
-  full.querySelectorAll(".rate").forEach((b) => { b.classList.toggle("on", b.dataset.r === im.rating); b.disabled = cur.state !== "ждёт"; });
+  full.style.cssText = bgStyle(im);
+  const fbgs = document.getElementById("fbgs");
+  fbgs.innerHTML = bgButton(im);
+  fbgs.querySelectorAll("button").forEach((b) => b.onclick = () => nextBg(im));
+  const fname = document.getElementById("fname");
+  fname.innerHTML = (cur.groups.length > 1 ? esc(g.name) + " · " : "") + caption(im) + `<small>${fullAt + 1}/${flat.length}</small>`;
+  full.querySelectorAll(".rate").forEach((b) => {
+    const on = b.dataset.r === im.rating;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); b.disabled = cur.state !== "ждёт"; });
   if (document.activeElement !== fcomment) fcomment.value = im.comment || "";
   fcomment.disabled = cur.state !== "ждёт";
 }
@@ -204,7 +353,7 @@ document.getElementById("fprev").onclick = () => showFull(fullAt - 1);
 document.getElementById("fnext").onclick = () => showFull(fullAt + 1);
 document.getElementById("fclose").onclick = closeFull;
 full.querySelector(".stage").onclick = closeFull;
-full.querySelectorAll(".rate").forEach((b) => b.onclick = () => rate(flat[fullAt], b.dataset.r));
+full.querySelectorAll(".rate").forEach((b) => { b.innerHTML = PICK; b.onclick = () => rate(flat[fullAt], b.dataset.r); });
 fcomment.oninput = () => comment(flat[fullAt], fcomment.value);
 document.addEventListener("keydown", (e) => {
   if (fullAt < 0 || document.activeElement === fcomment) { if (e.key === "Escape" && fullAt >= 0) closeFull(); return; }
@@ -214,5 +363,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 setInterval(poll, 1500); poll();
+
+// Где нет field-sizing, поле подгоняется по высоте скриптом.
+if (!CSS.supports("field-sizing", "content")){
+  const autosize = (t) => { t.style.height = "auto"; t.style.height = t.scrollHeight + 2 + "px"; };
+  document.addEventListener("input", (e) => { if (e.target.matches("textarea")) autosize(e.target); });
+  new MutationObserver(() => document.querySelectorAll("textarea").forEach(autosize)).observe(document.body, {childList: true, subtree: true});
+}
 </script>
 </body></html>

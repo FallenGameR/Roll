@@ -175,11 +175,12 @@ session = await joinSession({
         createCanvas({
             id: "roll-look",
             displayName: "Сравнение картинок",
-            description: "Крупное сравнение вариантов картинок по группам: на каждую «нравится» / «не нравится» и комментарий, общий комментарий на группу; по кнопке «Отправить» оценки уходят в сессию.",
+            description: "Крупное сравнение вариантов картинок по группам: на каждую «нравится» и комментарий, общий комментарий на группу, прогресс съёмки с заглушками недорисованных кадров; по кнопке «Отправить» оценки уходят в сессию.",
             actions: [
                 action("propose",
-                    "Показать круг. groups - группы вариантов, по группе на кадр: { name, images: [полные пути PNG/JPG/WebP], note? }. " +
-                    "Состояние своё у каждого instanceId: новый круг - новый instanceId или новый propose в тот же. " +
+                    "Показать круг. groups - группы вариантов, по группе на кадр: { name, images: [полные пути или { path, label }], pending?, labels?, note? }. " +
+                    "Файлов может ещё не быть: на их месте заглушка «рисуется» / «в очереди», появившийся файл встаёт сам. pending - слоты без пути, их заполняет add. " +
+                    "Состояние своё у каждого instanceId; повторный propose в неотправленный круг сохраняет оценки. " +
                     "По кнопке «Отправить» оценки придут в сессию сообщением [Сравнение картинок] и запишутся в TSV рядом с состоянием сессии.",
                     {
                         type: "object",
@@ -191,16 +192,40 @@ session = await joinSession({
                                     type: "object",
                                     properties: {
                                         name: { type: "string" },
-                                        images: { type: "array", minItems: 1, items: { type: "string" } },
+                                        images: { type: "array", items: { type: ["string", "object"] } },
+                                        pending: { type: "integer", minimum: 0 },
+                                        labels: { type: "array", items: { type: "string" } },
                                         note: { type: "string" },
                                     },
-                                    required: ["name", "images"],
+                                    required: ["name"],
                                 },
                             },
                         },
                         required: ["title", "groups"],
                     }, "look"),
                 action("status", "Оценки этого круга: по картинке оценка и комментарий, по группе комментарий; отправлен ли.", undefined, "look"),
+                action("add",
+                    "Дописать файлы в группу круга: сначала занимают слоты без пути (pending), остальное в конец; группы нет - создаётся. " +
+                    "Файла может ещё не быть на диске: панель сама заметит его появление. Оценки не теряются.",
+                    {
+                        type: "object",
+                        properties: {
+                            group: { type: "string" },
+                            images: { type: "array", minItems: 1, items: { type: ["string", "object"] } },
+                        },
+                        required: ["group", "images"],
+                    }, "look"),
+                action("progress",
+                    "Строка прогресса над кругом: «готово done из total, осталось ~M:SS · note», отсчёт тикает сам. " +
+                    "done и total по умолчанию - сколько файлов круга уже на диске. Пустой вызов убирает срок и подпись; " +
+                    "счётчик «готово N из M» виден, пока в круге есть недорисованные кадры.",
+                    {
+                        type: "object",
+                        properties: {
+                            done: { type: "integer" }, total: { type: "integer" },
+                            eta_seconds: { type: "number" }, note: { type: "string" },
+                        },
+                    }, "look"),
             ],
             open: async (ctx) => ({
                 title: "Сравнение картинок",

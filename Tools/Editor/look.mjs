@@ -1,10 +1,11 @@
 // Логика canvas «Сравнение картинок». Сессия подаёт круг: группы вариантов,
-// по группе на кадр. Мастер на каждую картинку ставит «нравится» или «не
-// нравится» и пишет комментарий, на группу - общий комментарий, и
-// отправляет всё разом. Состояние своё у каждого instanceId (images
+// по группе на кадр. Мастер отмечает понравившиеся картинки и пишет
+// комментарии, на группу - общий комментарий, и
+// отправляет всё разом. Кадры, которые ещё рисуются, стоят заглушками и
+// встают на место, когда файл появится. Состояние своё у каждого instanceId (images
 // открывает по панели на круг) и лежит в roll-look-<instanceId>.json в
 // папке сессии: клики переживают перезагрузку страницы и расширения.
-import { existsSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
@@ -22,8 +23,30 @@ const memory = (globalThis.__rollLook ??= {});
 
 async function load(session, id) {
     const path = storePath(session, id);
-    if (!path) return memory[safeId(id)] ?? null;
-    try { return JSON.parse(await readFile(path, "utf8")); } catch { return null; }
+    let state;
+    if (!path) state = memory[safeId(id)] ?? null;
+    else { try { state = JSON.parse(await readFile(path, "utf8")); } catch { state = null; } }
+    return upgrade(state);
+}
+
+// Круги, открытые до прогресса съёмки, хранили картинки строками, оценки
+// по номерам «группа.картинка», а комментарии групп по номеру группы.
+function upgrade(state) {
+    if (!state?.groups) return state;
+    const old = state.groups.some((g) => g.images.some((s) => typeof s === "string"));
+    if (!old) return state;
+    state.groups = state.groups.map((g) => ({ ...g, images: g.images.map((s) => (typeof s === "string" ? { path: s, label: "" } : s)) }));
+    const marks = {};
+    for (const [k, m] of Object.entries(state.marks ?? {})) {
+        const hit = /^(\d+)\.(\d+)$/.exec(k);
+        const p = hit && state.groups[+hit[1]]?.images[+hit[2]]?.path;
+        marks[p ? p.toLowerCase() : k] = m;
+    }
+    state.marks = marks;
+    const comments = {};
+    for (const [k, c] of Object.entries(state.groupComments ?? {})) comments[state.groups[+k]?.name ?? k] = c;
+    state.groupComments = comments;
+    return state;
 }
 
 async function save(session, id, state) {
@@ -40,19 +63,79 @@ function serial(fn) {
     return run;
 }
 
-const RATING = { like: "нравится", dislike: "не нравится" };
+const RATING = { like: "нравится" };
+
+// Слот картинки: { path, label }. path может указывать на файл, которого
+// ещё нет (кадр рисуется), или быть null (слот без имени, его заполнит add).
+// Оценки и комментарии держатся по пути файла, комментарии групп - по имени
+// группы: так они переживают и повторный propose, и дорисовку.
+function slot(x) {
+    if (x && typeof x === "object") return { path: x.path ? String(x.path) : null, label: x.label ? String(x.label) : "" };
+    return { path: String(x), label: "" };
+}
+const markKey = (path) => (path ?? "").toLowerCase();
+
+function stat(path) {
+    try { return path ? statSync(path) : null; } catch { return null; }
+}
+
+// Есть ли у картинки прозрачность: фон под ней переключается только тогда.
+// PNG - по типу цвета в IHDR или чанку tRNS, WebP - по флагу в VP8X или
+// VP8L. Ответ кешируется по пути и времени файла.
+const alphaCache = new Map();
+function hasAlpha(path, st) {
+    const key = `${path}|${st.mtimeMs}`;
+    if (alphaCache.has(key)) return alphaCache.get(key);
+    let alpha = false;
+    try {
+        const fd = openSync(path, "r");
+        const buf = Buffer.alloc(Math.min(st.size, 65536));
+        readSync(fd, buf, 0, buf.length, 0);
+        closeSync(fd);
+        if (buf.toString("latin1", 1, 4) === "PNG") {
+            alpha = buf[25] === 4 || buf[25] === 6;
+            for (let at = 8; !alpha && at + 8 <= buf.length;) {
+                const len = buf.readUInt32BE(at), type = buf.toString("latin1", at + 4, at + 8);
+                if (type === "tRNS") alpha = true;
+                if (type === "IDAT" || type === "IEND") break;
+                at += 12 + len;
+            }
+        } else if (buf.toString("latin1", 8, 12) === "WEBP") {
+            const kind = buf.toString("latin1", 12, 16);
+            if (kind === "VP8X") alpha = (buf[20] & 0x10) !== 0;
+            else if (kind === "VP8L") alpha = ((buf.readUInt32LE(21) >>> 28) & 1) === 1;
+        }
+    } catch { }
+    alphaCache.set(key, alpha);
+    return alpha;
+}
 
 function view(state) {
     if (!state) return { state: "пусто" };
+    let ready = 0, total = 0;
+    const groups = state.groups.map((g, gi) => ({
+        name: g.name, note: g.note, comment: state.groupComments[g.name] ?? "",
+        images: g.images.map((s, ii) => {
+            const st = stat(s.path);
+            const ok = !!st && st.size > 0;
+            total++; if (ok) ready++;
+            return {
+                gi, ii, path: s.path, label: s.label,
+                name: s.path ? basename(s.path) : (s.label || `кадр ${ii + 1}`),
+                ready: ok, v: ok ? Math.round(st.mtimeMs) : 0, alpha: ok && hasAlpha(s.path, st),
+                ...(s.path ? state.marks[markKey(s.path)] ?? {} : {}),
+            };
+        }),
+    }));
+    const p = state.progress ?? null;
     return {
         rid: state.rid, title: state.title, state: state.status, sentAt: state.sentAt, out: state.out,
-        groups: state.groups.map((g, gi) => ({
-            name: g.name, note: g.note, comment: state.groupComments[gi] ?? "",
-            images: g.images.map((path, ii) => ({
-                gi, ii, name: basename(path),
-                ...(state.marks[`${gi}.${ii}`] ?? {}),
-            })),
-        })),
+        groups, ready, total, now: Date.now(),
+        progress: p && {
+            done: p.done ?? ready, total: p.total ?? total, note: p.note ?? "",
+            // До какого момента ждать, по часам сервера; страница сама тикает.
+            until: p.eta_seconds != null ? p.at + p.eta_seconds * 1000 : null,
+        },
     };
 }
 
@@ -68,18 +151,18 @@ async function submit(session, id, body) {
         const rows = ["group\tfile\trating\tcomment\tpath"];
         const msg = [];
         let rated = 0, total = 0;
-        state.groups.forEach((g, gi) => {
-            msg.push(`## ${g.name}` + (cell(state.groupComments[gi]) ? `: ${cell(state.groupComments[gi])}` : ""));
-            rows.push([g.name, "", "группа", state.groupComments[gi], ""].map(cell).join("\t"));
-            g.images.forEach((path, ii) => {
+        for (const g of view(state).groups) {
+            msg.push(`## ${g.name}` + (cell(g.comment) ? `: ${cell(g.comment)}` : ""));
+            rows.push([g.name, "", "группа", g.comment, ""].map(cell).join("\t"));
+            for (const im of g.images) {
+                if (!im.ready) continue;  // недорисованные кадры оценить было нельзя
                 total++;
-                const m = state.marks[`${gi}.${ii}`] ?? {};
-                const rating = RATING[m.rating] ?? "—";
-                if (m.rating === "like") rated++;
-                rows.push([g.name, basename(path), rating, m.comment, path].map(cell).join("\t"));
-                msg.push(`- ${basename(path)} → ${rating}` + (cell(m.comment) ? `: ${cell(m.comment)}` : ""));
-            });
-        });
+                const rating = RATING[im.rating] ?? "—";
+                if (im.rating === "like") rated++;
+                rows.push([g.name, im.name, rating, im.comment, im.path].map(cell).join("\t"));
+                msg.push(`- ${im.name} → ${rating}` + (cell(im.comment) ? `: ${cell(im.comment)}` : ""));
+            }
+        }
         if (dir) {
             await mkdir(dir, { recursive: true });
             state.out = join(dir, `roll-look-${safeId(id)}-${new Date().toISOString().replace(/[:.]/g, "-")}.tsv`);
@@ -95,34 +178,75 @@ async function submit(session, id, body) {
     });
 }
 
+function summary(state) {
+    const v = view(state);
+    return { rid: v.rid, title: v.title, state: v.state, ready: v.ready, total: v.total };
+}
+
 export const actions = {
+    // Повторный propose в тот же неотправленный круг сохраняет оценки (по
+    // пути файла) и комментарии групп (по имени группы).
     async propose({ session, input, instanceId }) {
-        const groups = [];
-        for (const g of input.groups) {
-            const images = (g.images ?? []).map(String);
-            const missing = images.filter((p) => !existsSync(p));
-            if (missing.length) throw fail("no_file", `нет файлов: ${missing.join(", ")}`);
-            groups.push({ name: String(g.name), note: g.note ?? "", images });
-        }
+        const groups = input.groups.map((g) => {
+            const images = (g.images ?? []).map(slot);
+            for (let k = 0; k < (g.pending ?? 0); k++) images.push({ path: null, label: g.labels?.[k] ?? "" });
+            return { name: String(g.name), note: g.note ?? "", images };
+        });
         return serial(async () => {
+            const old = await load(session, instanceId);
+            const keep = old && old.status === "ждёт";
             const state = {
-                rid: Date.now().toString(36), title: input.title, groups,
-                marks: {}, groupComments: {}, status: "ждёт", at: new Date().toISOString(),
+                rid: keep ? old.rid : Date.now().toString(36), title: input.title, groups,
+                marks: keep ? old.marks : {}, groupComments: keep ? old.groupComments : {},
+                progress: keep ? old.progress : null,
+                status: "ждёт", at: new Date().toISOString(),
             };
             await save(session, instanceId, state);
-            return { rid: state.rid, title: state.title, state: state.status,
-                     images: groups.reduce((n, g) => n + g.images.length, 0) };
+            return summary(state);
+        });
+    },
+    // Дописать готовые (или будущие) файлы в группу: сначала занимаются
+    // слоты без пути, остальное добавляется в конец; нет группы - создаётся.
+    async add({ session, input, instanceId }) {
+        return serial(async () => {
+            const state = await load(session, instanceId);
+            if (!state) throw fail("no_round", "круга нет, сначала propose");
+            let g = state.groups.find((x) => x.name === input.group);
+            if (!g) { g = { name: String(input.group), note: "", images: [] }; state.groups.push(g); }
+            for (const s of (input.images ?? []).map(slot)) {
+                if (g.images.some((x) => x.path && markKey(x.path) === markKey(s.path))) continue;
+                const free = g.images.find((x) => !x.path);
+                if (free) { free.path = s.path; if (s.label) free.label = s.label; }
+                else g.images.push(s);
+            }
+            await save(session, instanceId, state);
+            return summary(state);
+        });
+    },
+    // { done?, total?, eta_seconds?, note? }; done и total по умолчанию -
+    // сколько файлов круга уже есть на диске. Пустой вызов убирает срок и
+    // подпись, счётчик остаётся, пока есть недорисованные кадры.
+    async progress({ session, input, instanceId }) {
+        return serial(async () => {
+            const state = await load(session, instanceId);
+            if (!state) throw fail("no_round", "круга нет, сначала propose");
+            const empty = !Object.keys(input).length;
+            state.progress = empty ? null : { ...input, at: Date.now() };
+            await save(session, instanceId, state);
+            return summary(state);
         });
     },
     async status({ session, instanceId }) {
-        const state = await load(session, instanceId);
+        // Через очередь: иначе status, вызванный сразу за propose или add,
+        // читает файл раньше, чем они его запишут.
+        const state = await serial(() => load(session, instanceId));
         if (!state) return { state: "пусто" };
         const v = view(state);
         return {
-            rid: v.rid, title: v.title, state: v.state, sentAt: v.sentAt, out: v.out,
+            rid: v.rid, title: v.title, state: v.state, sentAt: v.sentAt, out: v.out, ready: v.ready, total: v.total,
             groups: v.groups.map((g) => ({
                 name: g.name, comment: g.comment,
-                images: g.images.map((im) => ({ file: im.name, path: state.groups[im.gi].images[im.ii],
+                images: g.images.map((im) => ({ file: im.name, path: im.path, ready: im.ready,
                                                 rating: RATING[im.rating] ?? "—", comment: im.comment ?? "" })),
             })),
         };
@@ -135,18 +259,22 @@ export const routes = {
     // картинки: произвольный путь с диска через страницу не достать.
     "/img": async ({ session, query }) => {
         const state = await load(session, query.i);
-        const path = state?.groups?.[+query.g]?.images?.[+query.n];
-        if (!path) throw fail("no_image", "нет такой картинки");
+        const path = state?.groups?.[+query.g]?.images?.[+query.n]?.path;
+        if (!path || !existsSync(path)) throw fail("no_image", "нет такой картинки");
         return { file: path };
     },
-    // { rid, g, n?, rating?: "like"|"dislike"|null, comment? }; без n - комментарий группы.
+    // { rid, g, n?, rating?: "like"|null, comment? }; без n - комментарий группы.
     "/mark": async ({ session, query, body }) => serial(async () => {
         const state = await load(session, query.i);
         if (!state || state.rid !== body.rid || state.status !== "ждёт") return { ok: false };
+        const g = state.groups[body.g];
+        if (!g) return { ok: false };
         if (body.n === undefined || body.n === null) {
-            state.groupComments[body.g] = String(body.comment ?? "");
+            state.groupComments[g.name] = String(body.comment ?? "");
         } else {
-            const key = `${body.g}.${body.n}`;
+            const path = g.images[body.n]?.path;
+            if (!path) return { ok: false };
+            const key = markKey(path);
             const m = { ...(state.marks[key] ?? {}) };
             if (body.rating !== undefined) m.rating = body.rating || undefined;
             if (body.comment !== undefined) m.comment = String(body.comment);
