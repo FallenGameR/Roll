@@ -172,7 +172,7 @@ QML и 278 иконок в `ark\icons`. Это код reMarkable: класть �
 | Симптом | Файл | Зацепка |
 |---|---|---|
 | след после входа в настройки | `qml\device\view\settings\Settings.qml` | `function onOpened` |
-| первая отрисовка библиотеки после PIN | `xofm\modules\security\pincode\qml\UnlockWindow.qml` | окно скрылось (`onVisibleChanged`) |
+| первая отрисовка библиотеки после PIN | `qml\device\view\navigator\Navigator.qml` | библиотека снова получила фокус (`onActiveFocusChanged`). `UnlockWindow.qml` `onVisibleChanged` 26 ноября не сработал ни разу |
 | след значка ожидания при открытии PDF | `qml\device\view\documentview\DocumentView.qml` | `Loading { id: loadingIndicator }`, видим при `isBusy`; ловить `onVisibleChanged` в `false` |
 | значки батареи, зарядки, синхронизации вверху справа не перерисовались в библиотеке | `qml\device\view\navigator\ContentHeader.qml` (`statusIndicators`), `Navigator.qml` | `Navigator` `onVisibleChanged` в `true` |
 | следы после ластика | `qml\device\view\documentview\DeviceSceneView.qml` | `onStrokeCompleted`, после `eraseWithLine` |

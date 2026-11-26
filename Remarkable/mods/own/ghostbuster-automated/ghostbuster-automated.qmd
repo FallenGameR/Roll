@@ -4,10 +4,11 @@
 ; writes "gba: <event>" to the xochitl journal, to see which one fired.
 ; Events:
 ;   settings opened                    (Settings.qml, onOpened)
-;   document stopped loading           (DocumentView.qml: isBusy, isLoading,
-;                                       loadingIndicator hidden)
-;   library shown again                (Navigator.qml, visible)
-;   PIN entered, unlock screen closed  (UnlockWindow.qml)
+;   document stopped loading, but only if the loading indicator was shown
+;                                      (DocumentView.qml: loadingIndicator, isBusy, isLoading)
+;   library got input focus back for the first time after waking up or after
+;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
+;   activeFocus)
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
 ; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
 
@@ -34,19 +35,25 @@ AFFECT [[12599552112012170435]]
     END TRAVERSE
 END AFFECT
 
-; Document stopped loading
+; Document stopped loading, only if the loading indicator was shown: a quick
+; open with no indicator leaves no ghost and gets no refresh.
 AFFECT [[1224665461898798997]]
     IMPORT [[197082280.8400022150001312063]] 1.0
     TRAVERSE [[8397993708429497603]]#[[6504254477]]
         LOCATE AFTER ALL
         INSERT {
+            property ~&6503679477&~ gbaIndicatorShown: ~&214625660372&~
             property ~&7083178290016&~ gbaLoadingReason: ""
 
             ~&214604601930&~ {
                 ~&5972374&~: gbaLoadingTimer
-                ~&7713147298280334&~: 400
+                ~&7713147298280334&~: 1000
                 ~&7083121289162&~: ~&214625660372&~
                 ~&495358363329399331&~: {
+                    ~&5972376&~ (~&6504254477&~.~&7082784038440&~ || ~&6504254477&~.~&254534022647302435&~) {
+                        ~&7083121450889&~;
+                    }
+                    ~&6504254477&~.gbaIndicatorShown = ~&214625660372&~;
                     ~&233724020023100&~.~&197092075&~("gba: document loaded, " + ~&6504254477&~.gbaLoadingReason);
                     ~&6687579895491175043&~.clearGhosting();
                 }
@@ -55,7 +62,9 @@ AFFECT [[1224665461898798997]]
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&12173585954242770596&~
                 function ~&13733777459642361598&~() {
-                    ~&5972376&~ (!~&12173585954242770596&~.~&233748328658231&~) {
+                    ~&5972376&~ (~&12173585954242770596&~.~&233748328658231&~) {
+                        ~&6504254477&~.gbaIndicatorShown = ~&6504329801&~;
+                    } ~&6503784146&~ {
                         ~&6504254477&~.gbaLoadingReason = "indicator hidden";
                         gbaLoadingTimer.~&233743006639214&~();
                     }
@@ -65,13 +74,13 @@ AFFECT [[1224665461898798997]]
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&6504254477&~
                 function onIsBusyChanged() {
-                    ~&5972376&~ (!~&6504254477&~.~&7082784038440&~) {
+                    ~&5972376&~ (!~&6504254477&~.~&7082784038440&~ && ~&6504254477&~.gbaIndicatorShown) {
                         ~&6504254477&~.gbaLoadingReason = "busy over";
                         gbaLoadingTimer.~&233743006639214&~();
                     }
                 }
                 function onIsLoadingChanged() {
-                    ~&5972376&~ (!~&6504254477&~.~&254534022647302435&~) {
+                    ~&5972376&~ (!~&6504254477&~.~&254534022647302435&~ && ~&6504254477&~.gbaIndicatorShown) {
                         ~&6504254477&~.gbaLoadingReason = "loading over";
                         gbaLoadingTimer.~&233743006639214&~();
                     }
@@ -81,17 +90,14 @@ AFFECT [[1224665461898798997]]
     END TRAVERSE
 END AFFECT
 
-; Library shown again
+; Library: first input focus after waking up (or after xochitl start), i.e.
+; after the PIN screen closed. Other returns to the library are left alone.
 AFFECT [[8850026134298937527]]
     IMPORT [[197082280.8400022150001312063]] 1.0
     TRAVERSE [[8397993708429497603]]#[[6504254477]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&6503679477&~ gbaReady: ~&214625660372&~
-
-            ~&254480451320573660&~.~&495334332051582499&~: {
-                ~&6504254477&~.gbaReady = ~&6504329801&~;
-            }
+            property ~&6503679477&~ gbaAfterWake: ~&6504329801&~
 
             ~&214604601930&~ {
                 ~&5972374&~: gbaLibraryTimer
@@ -99,45 +105,27 @@ AFFECT [[8850026134298937527]]
                 ~&7083121289162&~: ~&214625660372&~
                 ~&495358363329399331&~: {
                     ~&5972376&~ (~&6504254477&~.~&233748328658231&~) {
-                        ~&233724020023100&~.~&197092075&~("gba: library shown");
+                        ~&233724020023100&~.~&197092075&~("gba: library after wake");
                         ~&6687579895491175043&~.clearGhosting();
                     }
                 }
             }
 
             ~&428051690305612204&~ {
-                ~&7083194890448&~: ~&6504254477&~
-                function ~&13733777459642361598&~() {
-                    ~&5972376&~ (~&6504254477&~.~&233748328658231&~ && ~&6504254477&~.gbaReady) {
-                        gbaLibraryTimer.~&233743006639214&~();
+                ~&7083194890448&~: ~&12464413590283098527&~
+                function ~&3195267410216262759&~(previous, next) {
+                    ~&5972376&~ (~&6504254477&~.~&7259149667979419107&~(previous, next)) {
+                        ~&6504254477&~.gbaAfterWake = ~&6504329801&~;
                     }
-                }
-            }
-        }
-    END TRAVERSE
-END AFFECT
-
-; PIN entered: the unlock screen closes and the library is drawn for the first time
-AFFECT [[5177080399408383139]]
-    IMPORT [[197082280.8400022150001312063]] 1.0
-    TRAVERSE [[7711468349764991]]#[[6504254477]]
-        LOCATE AFTER ALL
-        INSERT {
-            ~&214604601930&~ {
-                ~&5972374&~: gbaUnlockTimer
-                ~&7713147298280334&~: 600
-                ~&7083121289162&~: ~&214625660372&~
-                ~&495358363329399331&~: {
-                    ~&233724020023100&~.~&197092075&~("gba: unlocked");
-                    ~&6687579895491175043&~.clearGhosting();
                 }
             }
 
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&6504254477&~
-                function ~&13733777459642361598&~() {
-                    ~&5972376&~ (!~&6504254477&~.~&233748328658231&~) {
-                        gbaUnlockTimer.~&233743006639214&~();
+                function ~&13675943803964766956&~() {
+                    ~&5972376&~ (~&6504254477&~.~&473450369389093477&~ && ~&6504254477&~.gbaAfterWake) {
+                        ~&6504254477&~.gbaAfterWake = ~&214625660372&~;
+                        gbaLibraryTimer.~&233743006639214&~();
                     }
                 }
             }

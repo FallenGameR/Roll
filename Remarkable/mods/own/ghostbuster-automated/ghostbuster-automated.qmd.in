@@ -4,10 +4,11 @@
 ; writes "gba: <event>" to the xochitl journal, to see which one fired.
 ; Events:
 ;   settings opened                    (Settings.qml, onOpened)
-;   document stopped loading           (DocumentView.qml: isBusy, isLoading,
-;                                       loadingIndicator hidden)
-;   library shown again                (Navigator.qml, visible)
-;   PIN entered, unlock screen closed  (UnlockWindow.qml)
+;   document stopped loading, but only if the loading indicator was shown
+;                                      (DocumentView.qml: loadingIndicator, isBusy, isLoading)
+;   library got input focus back for the first time after waking up or after
+;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
+;   activeFocus)
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
 ; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
 
@@ -34,19 +35,25 @@ AFFECT [[/qml/device/view/settings/Settings.qml]]
     END TRAVERSE
 END AFFECT
 
-; Document stopped loading
+; Document stopped loading, only if the loading indicator was shown: a quick
+; open with no indicator leaves no ghost and gets no refresh.
 AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
     IMPORT [[com.remarkable]] 1.0
     TRAVERSE [[FocusScope]]#[[root]]
         LOCATE AFTER ALL
         INSERT {
+            property ~&bool&~ gbaIndicatorShown: ~&false&~
             property ~&string&~ gbaLoadingReason: ""
 
             ~&Timer&~ {
                 ~&id&~: gbaLoadingTimer
-                ~&interval&~: 400
+                ~&interval&~: 1000
                 ~&repeat&~: ~&false&~
                 ~&onTriggered&~: {
+                    ~&if&~ (~&root&~.~&isBusy&~ || ~&root&~.~&isLoading&~) {
+                        ~&return&~;
+                    }
+                    ~&root&~.gbaIndicatorShown = ~&false&~;
                     ~&console&~.~&log&~("gba: document loaded, " + ~&root&~.gbaLoadingReason);
                     ~&EPFramebuffer&~.clearGhosting();
                 }
@@ -55,7 +62,9 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
             ~&Connections&~ {
                 ~&target&~: ~&loadingIndicator&~
                 function ~&onVisibleChanged&~() {
-                    ~&if&~ (!~&loadingIndicator&~.~&visible&~) {
+                    ~&if&~ (~&loadingIndicator&~.~&visible&~) {
+                        ~&root&~.gbaIndicatorShown = ~&true&~;
+                    } ~&else&~ {
                         ~&root&~.gbaLoadingReason = "indicator hidden";
                         gbaLoadingTimer.~&restart&~();
                     }
@@ -65,13 +74,13 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
             ~&Connections&~ {
                 ~&target&~: ~&root&~
                 function onIsBusyChanged() {
-                    ~&if&~ (!~&root&~.~&isBusy&~) {
+                    ~&if&~ (!~&root&~.~&isBusy&~ && ~&root&~.gbaIndicatorShown) {
                         ~&root&~.gbaLoadingReason = "busy over";
                         gbaLoadingTimer.~&restart&~();
                     }
                 }
                 function onIsLoadingChanged() {
-                    ~&if&~ (!~&root&~.~&isLoading&~) {
+                    ~&if&~ (!~&root&~.~&isLoading&~ && ~&root&~.gbaIndicatorShown) {
                         ~&root&~.gbaLoadingReason = "loading over";
                         gbaLoadingTimer.~&restart&~();
                     }
@@ -81,17 +90,14 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
     END TRAVERSE
 END AFFECT
 
-; Library shown again
+; Library: first input focus after waking up (or after xochitl start), i.e.
+; after the PIN screen closed. Other returns to the library are left alone.
 AFFECT [[/qml/device/view/navigator/Navigator.qml]]
     IMPORT [[com.remarkable]] 1.0
     TRAVERSE [[FocusScope]]#[[root]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&bool&~ gbaReady: ~&false&~
-
-            ~&Component&~.~&onCompleted&~: {
-                ~&root&~.gbaReady = ~&true&~;
-            }
+            property ~&bool&~ gbaAfterWake: ~&true&~
 
             ~&Timer&~ {
                 ~&id&~: gbaLibraryTimer
@@ -99,45 +105,27 @@ AFFECT [[/qml/device/view/navigator/Navigator.qml]]
                 ~&repeat&~: ~&false&~
                 ~&onTriggered&~: {
                     ~&if&~ (~&root&~.~&visible&~) {
-                        ~&console&~.~&log&~("gba: library shown");
+                        ~&console&~.~&log&~("gba: library after wake");
                         ~&EPFramebuffer&~.clearGhosting();
                     }
                 }
             }
 
             ~&Connections&~ {
-                ~&target&~: ~&root&~
-                function ~&onVisibleChanged&~() {
-                    ~&if&~ (~&root&~.~&visible&~ && ~&root&~.gbaReady) {
-                        gbaLibraryTimer.~&restart&~();
+                ~&target&~: ~&BatteryManager&~
+                function ~&onDisplayStateChanged&~(previous, next) {
+                    ~&if&~ (~&root&~.~&wasSleepingAndIsAwake&~(previous, next)) {
+                        ~&root&~.gbaAfterWake = ~&true&~;
                     }
-                }
-            }
-        }
-    END TRAVERSE
-END AFFECT
-
-; PIN entered: the unlock screen closes and the library is drawn for the first time
-AFFECT [[/qt/qml/xofm/modules/security/pincode/qml/UnlockWindow.qml]]
-    IMPORT [[com.remarkable]] 1.0
-    TRAVERSE [[BaseView]]#[[root]]
-        LOCATE AFTER ALL
-        INSERT {
-            ~&Timer&~ {
-                ~&id&~: gbaUnlockTimer
-                ~&interval&~: 600
-                ~&repeat&~: ~&false&~
-                ~&onTriggered&~: {
-                    ~&console&~.~&log&~("gba: unlocked");
-                    ~&EPFramebuffer&~.clearGhosting();
                 }
             }
 
             ~&Connections&~ {
                 ~&target&~: ~&root&~
-                function ~&onVisibleChanged&~() {
-                    ~&if&~ (!~&root&~.~&visible&~) {
-                        gbaUnlockTimer.~&restart&~();
+                function ~&onActiveFocusChanged&~() {
+                    ~&if&~ (~&root&~.~&activeFocus&~ && ~&root&~.gbaAfterWake) {
+                        ~&root&~.gbaAfterWake = ~&false&~;
+                        gbaLibraryTimer.~&restart&~();
                     }
                 }
             }
