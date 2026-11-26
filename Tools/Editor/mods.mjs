@@ -21,7 +21,7 @@ const Q = `${X}/exthome/qt-resource-rebuilder`;
 const E = `${X}/extensions.d`;
 const D = `${X}/disabled-mods`;
 const VELLUM = "/home/root/.vellum/bin/vellum";
-const TRIAL_SECONDS = 600;
+const TRIAL_SECONDS = 900;
 
 const SYSTEM = new Set(["xovi", "xovi-extensions", "qt-resource-rebuilder", "qt-command-executor",
     "xovi-message-broker", "vellum", "vellum-bash-completion", "remarkable-os", "rmpp"]);
@@ -49,6 +49,7 @@ const RU = {
     "ghostbuster-eraser.qmd": "Полная перерисовка после ластика.",
     "ghostbuster-settings.qmd": "Полная перерисовка при выходе из настроек.",
     "ghostbuster-global.qmd": "Тап пятью пальцами где угодно - перерисовка (EPFramebuffer.clearGhosting).",
+    "tapPageTurn.qmd": "Наш: тап по краю экрана листает. Склейка tap-to-change-view-or-page и scroll-screen-up-or-down в один файл; их самих тогда удалить.",
 };
 
 const ACTION_NAMES = {
@@ -209,6 +210,7 @@ echo @@HASHTAB; cat ${X}/hashtab.os 2>/dev/null; [ -f /tmp/hashtab.running ] && 
 echo @@INSTALLED; cat /home/root/.vellum/lib/apk/db/installed
 echo @@INDEX; for f in /home/root/.vellum/etc/apk/cache/APKINDEX.*.tar.gz /home/root/.vellum/local-repo/*/APKINDEX.tar.gz; do [ -f "$f" ] && tar -xzOf "$f" APKINDEX; echo; done
 echo @@FILES; find ${Q} ${E} ${D} -type f 2>/dev/null
+echo @@LOADERS; for f in ${Q}/_*.qmd; do [ -f "$f" ] && cat "$f"; echo; done
 echo @@END
 `;
 
@@ -222,6 +224,8 @@ async function fetchStatus(fetchIndex = false) {
 function build(s) {
     const os = s.OS.trim();
     const files = new Set(s.FILES.split("\n").map((l) => l.trim()).filter(Boolean));
+    const loaded = new Set((s.LOADERS ?? "").split("\n").map((l) => /^LOAD\s+(\S+)/.exec(l.trim())?.[1]).filter(Boolean));
+    const live = (f) => files.has(f) && (!loaderOf(f) || loaded.has(loaderOf(f).rel));
     const installed = records(s.INSTALLED);
     const index = records(s.INDEX);
     const now = Number(s.NOW.trim());
@@ -266,12 +270,14 @@ function build(s) {
         const modFiles = r.files.filter((f) => f.startsWith(Q + "/") || f.startsWith(E + "/"));
         modFiles.forEach((f) => owned.add(f));
         const kind = SYSTEM.has(r.P) ? "system" : modFiles.length ? "mod" : "utility";
-        const on = modFiles.filter((f) => files.has(f)).length;
+        const on = modFiles.filter(live).length;
         const off = modFiles.filter((f) => files.has(D + f)).length;
+        const stuck = modFiles.filter((f) => files.has(f) && !live(f)).length;
         const state = kind !== "mod" ? "стоит"
             : on === modFiles.length ? "включён"
                 : off === modFiles.length ? "выключен"
-                    : on + off === 0 ? "файлов нет" : "частично";
+                    : stuck ? "не загружается"
+                        : on + off === 0 ? "файлов нет" : "частично";
         const fresh = best(r.P);
         items.push({
             key: "pkg:" + r.P, name: r.P, kind, source: "vellum", state,
@@ -291,7 +297,7 @@ function build(s) {
     const third = new Map();
     for (const f of files) {
         const orig = f.startsWith(D + "/") ? f.slice(D.length) : f;
-        if (owned.has(orig) || orig === Q + "/hashtab") continue;
+        if (owned.has(orig) || orig === Q + "/hashtab" || /^_.*\.qmd$/.test(basename(orig)) && dirname(orig) === Q) continue;
         if (!(orig.startsWith(Q + "/") || orig.startsWith(E + "/"))) continue;
         const name = basename(orig);
         const it = third.get(name) ?? { files: new Set(), on: 0, off: 0 };
@@ -418,13 +424,42 @@ setsid sh -c 'while [ -f /tmp/mod-trial ] && [ $(date +%s) -lt $(cat /tmp/mod-tr
 if [ -f /tmp/mod-trial ]; then rm -f /tmp/mod-trial; echo "fired $(date +%s)" > ${TS}; umount -q /etc/systemd/system/xochitl.service.d; systemctl daemon-reload; systemctl restart xochitl; fi' </dev/null >/dev/null 2>&1 &
 `;
 const DISARM = (how) => `[ -f /tmp/mod-trial ] && echo "${how} $(date +%s)" > ${TS}; rm -f /tmp/mod-trial\n`;
-const XOVI_ON = `(setsid ${X}/start </dev/null >/dev/null 2>&1 &)\n`;
-const XOVI_OFF = `umount -q /etc/systemd/system/xochitl.service.d; systemctl daemon-reload; systemctl restart xochitl\n`;
+// У xochitl в юните StartLimitBurst=4 за 10 минут: это защита от петли
+// падений, после неё планшет перезагружается чистым, без модов. Наши
+// перезапуски намеренные, их счётчик обнуляется, но только если интерфейс
+// за эти 10 минут сам не падал: тогда защита остаётся в силе.
+const RESET = `journalctl -u xochitl --since "-10min" --no-pager 2>/dev/null | grep -q "Main process exited\\|code=dumped\\|code=killed" && echo "@@LOG интерфейс недавно падал: защиту от перезапусков не трогаю" || systemctl reset-failed xochitl; `;
+const XOVI_ON = RESET + `(setsid ${X}/start </dev/null >/dev/null 2>&1 &); echo "@@LOG XOVI запущен с модами"\n`;
+const XOVI_OFF = RESET + `umount -q /etc/systemd/system/xochitl.service.d; systemctl daemon-reload; systemctl restart xochitl; echo "@@LOG XOVI остановлен, интерфейс без модов"\n`;
 
-function moveScript(fileList, enable) {
-    return fileList.map((f) => enable
-        ? `if [ -f ${q(D + f)} ]; then mkdir -p ${q(dirname(f))}; if [ -f ${q(f)} ]; then rm -f ${q(D + f)}; else mv ${q(D + f)} ${q(f)}; fi; echo "@@LOG включён ${basename(f)}"; fi`
-        : `if [ -f ${q(f)} ]; then mkdir -p ${q(dirname(D + f))}; mv -f ${q(f)} ${q(D + f)}; echo "@@LOG выключен ${basename(f)}"; fi`).join("\n") + "\n";
+// Мод из подпапки qt-resource-rebuilder (ingatellent/x.qmd) qmldiff сам не
+// видит: его подключает строка «LOAD ingatellent/x.qmd» в загрузчике
+// _ingatellent.qmd в корне. Загрузчик ведёт установщик пакета, и при
+// ручном включении и выключении строку надо дописывать и убирать самой.
+function loaderOf(f) {
+    const rel = f.startsWith(Q + "/") ? f.slice(Q.length + 1) : "";
+    if (!rel.includes("/")) return null;
+    return { rel, file: `${Q}/_${rel.split("/")[0]}.qmd` };
+}
+
+export function moveScript(fileList, enable) {
+    return fileList.map((f) => {
+        const l = loaderOf(f);
+        if (enable) {
+            const load = l ? `; then touch ${q(l.file)}; grep -qx ${q("LOAD " + l.rel)} ${q(l.file)} || echo ${q("LOAD " + l.rel)} >> ${q(l.file)}; echo "@@LOG подключён ${l.rel}"` : "";
+            return `if [ -f ${q(D + f)} ]; then mkdir -p ${q(dirname(f))}; if [ -f ${q(f)} ]; then rm -f ${q(D + f)}; else mv ${q(D + f)} ${q(f)}; fi; echo "@@LOG включён ${basename(f)}"; fi` +
+                (l ? `\nif [ -f ${q(f)} ]${load}; fi` : "");
+        }
+        const unload = l ? `\nif [ -f ${q(l.file)} ]; then sed -i ${q("\\|^LOAD " + l.rel + "$|d")} ${q(l.file)}; [ -s ${q(l.file)} ] || rm -f ${q(l.file)}; fi` : "";
+        return `if [ -f ${q(f)} ]; then mkdir -p ${q(dirname(D + f))}; mv -f ${q(f)} ${q(D + f)}; echo "@@LOG выключен ${basename(f)}"; fi` + unload;
+    }).join("\n") + "\n";
+}
+
+// Ошибки оболочки на планшете (sh: ... syntax error и т. п.) не роняют
+// сценарий, а просто пропускают строку; их надо показать.
+function shErrors(err) {
+    return err.split("\n").map((l) => l.trim()).filter((l) => /^(sh|-sh|ash|bash):|syntax error|not found|No such file/i.test(l))
+        .map((l) => "ОШИБКА: " + l);
 }
 
 function logLines(text) {
@@ -482,7 +517,7 @@ async function apply(session, opts) {
             }
         }
         const r1 = await ssh(script, 300000);
-        mem.log.push(...logLines(r1.out));
+        mem.log.push(...logLines(r1.out), ...shErrors(r1.err));
 
         // После Vellum список файлов мог поменяться: перечитываю статус и
         // раскладываю файлы так, как выбрано.
@@ -501,9 +536,10 @@ async function apply(session, opts) {
         moves += start ? XOVI_ON : XOVI_OFF;
         if (!trial && start) moves += DISARM("cancelled");
         const r2 = await ssh(moves, 60000);
-        mem.log.push(...logLines(r2.out));
-        mem.log.push(start ? "XOVI запущен с модами" : "включённых модов не осталось, XOVI остановлен");
-        if (start && trial) mem.log.push(`проверка: ${TRIAL_SECONDS / 60} мин, без подтверждения моды выключатся сами`);
+        mem.log.push(...logLines(r2.out), ...shErrors(r2.err));
+        const started = /XOVI запущен/.test(r2.out);
+        if (start && !started) mem.log.push("ОШИБКА: XOVI не перезапустился, моды не применились");
+        if (start && trial && started) mem.log.push(`проверка: ${TRIAL_SECONDS / 60} мин, без подтверждения моды выключатся сами`);
 
         const done = plan.map((p) => `${p.it.name} → ${ACTION_NAMES[p.a]}`);
         mem.choices = {};

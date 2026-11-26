@@ -125,9 +125,24 @@ alex.kostikov@gmail.com.
 `Remarkable\mods` в корне Roll - файлы `.qmd` в том виде, как они стояли
 на планшете 26 ноября: посмотреть, сравнить с обновлением, вернуть руками
 (`scp -O` в папку qt-resource-rebuilder и `start`). Это чужой код под
-GPL/MIT, авторы и лицензии - в шапке каждого файла. Свои моды, если
-появятся, кладутся рядом в отдельную папку, а не правкой чужих: правку
-чужого `.qmd` затрёт следующий `vellum upgrade`.
+GPL/MIT, авторы и лицензии - в шапке каждого файла. Свои моды кладутся
+рядом в отдельную папку со своим `LICENSE`, а не правкой чужих: правку
+чужого `.qmd` затрёт следующий `vellum upgrade`. Канвас показывает такую
+папку в группе «Сторонние» и ставит её `.qmd` копией.
+
+## Свой мод tapPageTurn
+`Remarkable\mods\tap-page-turn\tapPageTurn.qmd` - тап по краю листает.
+Склейка двух модов ingatellent (`scrollScreenUpOrDown.qmd` и
+`tapToChangeViewOrPage.qmd`, папка 3.29 их репозитория) в один файл:
+лежит в корне qt-resource-rebuilder, загрузчик `_ingatellent.qmd` ему не
+нужен. Вместе с пакетами `tap-to-change-view-or-page` и
+`scroll-screen-up-or-down` не ставить, иначе тап сработает дважды.
+
+Склеен свой, потому что Vellum отдаёт моды под новую прошивку с
+опозданием в месяцы. После обновления прошивки: взять файлы из папки
+новой прошивки в github.com/ingatellent/xovi-qmd-extensions (или из
+`vellum` на другом планшете), склеить в том же порядке, проверить хеши по
+свежему `hashtab` и поставить с канваса.
 
 ## GhostBuster Reloaded
 Не из Vellum: github.com/pfjarschel/remarkable-paperpro-ghostbuster-reloaded,
@@ -150,6 +165,15 @@ qt-resource-rebuilder и `start`. Перед этим папка целиком 
 `/home/root/xovi/backup-2026-11-26`. Откат: удалить
 `ghostbuster-page.qmd` и `start`. Ssh-сессия с `start` может не закрыться
 сама; проверять по `pidof xochitl` и `LD_PRELOAD` в его environ.
+
+У `xochitl.service` стоит `StartLimitBurst=4` за `StartLimitIntervalSec=600`:
+пятый перезапуск интерфейса за 10 минут systemd отклоняет
+(`start-limit-hit`), и планшет уходит в перезагрузку, похожую на сон.
+26 ноября так и вышло после пяти применений подряд. Это защита от петли
+падений, отключать её нельзя. Канвас перед своим перезапуском обнуляет
+счётчик (`systemctl reset-failed xochitl`), только если за 10 минут
+интерфейс ни разу не упал сам (`Main process exited` в журнале); иначе
+не трогает, и защита срабатывает как задумано.
 
 Почему, скорее всего, вешал: мод зовёт `ghostBuster.forceClearNow(...)`,
 метод встроенного объекта GhostBuster прошивки, и вставляет код после

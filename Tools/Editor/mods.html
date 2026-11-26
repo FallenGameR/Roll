@@ -260,12 +260,12 @@ document.addEventListener("click", async (e) => {
   if (!d) return;
   if (d === "apply"){
     const n = items().filter((i) => i.choice).length;
-    if (!confirm(`Применить ${n} изм.? Интерфейс планшета перезапустится, открытый документ закроется.` + (trialSafe ? " Потом 10 минут на проверку." : ""))) return;
+    if (!confirm(`Применить ${n} изм.? Интерфейс планшета перезапустится, открытый документ закроется.` + (trialSafe ? " Потом 15 минут на проверку." : ""))) return;
     cur.busy = "применяю"; render();
     return load("/apply", { trial: trialSafe });
   }
   if (d === "rebuild" && !confirm("Интерфейс остановится, на планшете появится экран PIN: введи его. Потом интерфейс поднимется без модов. Начать?")) return;
-  if (d === "on" && !confirm("Запустить XOVI? Интерфейс перезапустится, заработают включённые моды." + (trialSafe ? " Потом 10 минут на проверку." : ""))) return;
+  if (d === "on" && !confirm("Запустить XOVI? Интерфейс перезапустится, заработают включённые моды." + (trialSafe ? " Потом 15 минут на проверку." : ""))) return;
   if (d === "off" && !confirm("Остановить XOVI? Интерфейс перезапустится без модов. Какие моды включены, запомнится.")) return;
   const map = { refresh: ["/refresh", {}], fetch: ["/refresh", { fetch: true }], on: ["/xovi", { on: true, trial: trialSafe }],
                 off: ["/xovi", { on: false }], confirm: ["/confirm", {}], rebuild: ["/rebuild", {}], reset: ["/reset", {}] };
