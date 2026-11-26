@@ -9,8 +9,62 @@
 ;   library got input focus back for the first time after waking up or after
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
+;   page turn that took long to draw   (DocumentView.qml: currentPage, isLoading);
+;                                       heavy pages (graphics-rich PDFs) leave
+;                                       ghosting, quick ones are left alone
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
 ; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
+
+; Document: a page turn that took long to draw. The time from the page change
+; to the end of loading (tiles rendered) is measured; above gbaSlowTurnMs the
+; screen is refreshed. Every turn writes its time to the journal, to tune the
+; threshold.
+AFFECT [[1224665461898798997]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&197088788&~ gbaSlowTurnMs: 400
+            property ~&7082585429636&~ gbaTurnAt: 0
+
+            ; The loading indicator of the document leaves the refresh to us: a
+            ; slow open or turn with dots on screen is refreshed once, here.
+            ~&233681166222244&~ {
+                ~&7083194890448&~: ~&12173585954242770596&~
+                property: "gbaSelfRefresh"
+                ~&214644635174&~: ~&214625660372&~
+            }
+
+            ~&214604601930&~ {
+                ~&5972374&~: gbaTurnTimer
+                ~&7713147298280334&~: 700
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function ~&2104365313657427216&~() {
+                    ~&6504254477&~.gbaTurnAt = ~&6502586279&~.now();
+                }
+                function onIsLoadingChanged() {
+                    ~&5972376&~ (~&6504254477&~.~&254534022647302435&~ || ~&6504254477&~.gbaTurnAt <= 0) {
+                        ~&7083121450889&~;
+                    }
+                    ~&214622607920&~ took = ~&6502586279&~.now() - ~&6504254477&~.gbaTurnAt;
+                    ~&6504254477&~.gbaTurnAt = 0;
+                    ~&214622607920&~ slow = took > ~&6504254477&~.gbaSlowTurnMs;
+                    ~&233724020023100&~.~&197092075&~("gba: page turn " + took + " ms" + (slow ? ", refresh" : ""));
+                    ~&5972376&~ (slow) {
+                        gbaTurnTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
 
 ; Settings opened
 AFFECT [[12599552112012170435]]
@@ -45,6 +99,9 @@ AFFECT [[9475861978899727926]]
         LOCATE AFTER ALL
         INSERT {
             property ~&6503679477&~ gbaDrawn: ~&214625660372&~
+            ; The document view handles its own indicator together with the page
+            ; turn, in one refresh; it sets this to false.
+            property ~&6503679477&~ gbaSelfRefresh: ~&6504329801&~
 
             ~&214604601930&~ {
                 ~&5972374&~: gbaSpinnerTimer
@@ -65,7 +122,7 @@ AFFECT [[9475861978899727926]]
         END REBUILD
 
         REBUILD [[6503888195]]
-            LOCATE BEFORE STREAM \~&4493576835535729955&~.~&6504295855&~();\ INSERT STREAM \ ~&5972376&~ (~&6504254477&~.gbaDrawn) { ~&6504254477&~.gbaDrawn = ~&214625660372&~; gbaSpinnerTimer.~&233743006639214&~(); }\
+            LOCATE BEFORE STREAM \~&4493576835535729955&~.~&6504295855&~();\ INSERT STREAM \ ~&5972376&~ (~&6504254477&~.gbaDrawn) { ~&6504254477&~.gbaDrawn = ~&214625660372&~; ~&5972376&~ (~&6504254477&~.gbaSelfRefresh) gbaSpinnerTimer.~&233743006639214&~(); }\
         END REBUILD
     END TRAVERSE
 END AFFECT

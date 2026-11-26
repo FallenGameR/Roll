@@ -1,8 +1,11 @@
-; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep.
+; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep,
+; in order: sleep-1, sleep-2, ..., then sleep-1 again.
 ; Works with the custom sleep screen: xochitl.conf [General] SleepScreenPath
 ; points at /home/root/sleepscreen/sleep-1.png. If the path ends with
-; "/sleep-<number>.png", the mod swaps the number for one of 1..gbaSleepCount,
-; chosen by the current second, every time the sleep window shows.
+; "/sleep-<number>.png", the mod swaps the number for the next one of
+; 1..gbaSleepCount every time the sleep window shows. The counter lives in the
+; sleep window; if the window is created anew for every sleep, the counter
+; starts from the current second instead, and the journal line shows it.
 ; Pictures: /home/root/sleepscreen/sleep-1.png, sleep-2.png, ... Adding a
 ; picture means one more file and a new gbaSleepCount below.
 ; Source: sleep-rotate.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -13,12 +16,18 @@ AFFECT [[/qt/qml/xofm/modules/sleepscreen/qml/default/sleep-window-opaque.qml]]
         LOCATE AFTER ALL
         INSERT {
             property ~&int&~ gbaSleepCount: 2
+            property ~&int&~ gbaSleepIndex: -1
 
             ~&Connections&~ {
                 ~&target&~: ~&root&~
                 function ~&onVisibleChanged&~() {
                     ~&if&~ (~&root&~.~&visible&~) {
+                        ~&const&~ fresh = ~&root&~.gbaSleepIndex < 0;
+                        ~&root&~.gbaSleepIndex = fresh
+                            ? ~&Math&~.~&floor&~(~&Date&~.now() / 1000) % ~&root&~.gbaSleepCount
+                            : (~&root&~.gbaSleepIndex + 1) % ~&root&~.gbaSleepCount;
                         ~&logo&~.~&source&~ = ~&root&~.~&makeSleepScreenPath&~();
+                        ~&console&~.~&log&~("sleep-rotate: picture " + (~&root&~.gbaSleepIndex + 1) + (fresh ? " (counter started)" : " (next)"));
                     }
                 }
             }
@@ -29,9 +38,8 @@ AFFECT [[/qt/qml/xofm/modules/sleepscreen/qml/default/sleep-window-opaque.qml]]
                 ~&let&~ ~&path&~ = ~&root&~.~&isettings&~.~&sleepScreenPath&~;
                 ~&const&~ cut = ~&path&~.lastIndexOf("/sleep-");
                 ~&if&~ (cut >= 0 && ~&root&~.gbaSleepCount > 0) {
-                    ~&const&~ pick = 1 + ~&Math&~.~&floor&~(~&Date&~.now() / 1000) % ~&root&~.gbaSleepCount;
+                    ~&const&~ pick = 1 + ~&Math&~.max(0, ~&root&~.gbaSleepIndex) % ~&root&~.gbaSleepCount;
                     ~&path&~ = ~&path&~.~&substring&~(0, cut) + "/sleep-" + pick + ".png";
-                    ~&console&~.~&log&~("sleep-rotate: " + ~&path&~);
                 }
                 ~&if&~ (!~&path&~.~&startsWith&~("file:")) {
                     ~&path&~ = "file://" + ~&path&~;

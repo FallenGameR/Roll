@@ -1,8 +1,11 @@
-; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep.
+; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep,
+; in order: sleep-1, sleep-2, ..., then sleep-1 again.
 ; Works with the custom sleep screen: xochitl.conf [General] SleepScreenPath
 ; points at /home/root/sleepscreen/sleep-1.png. If the path ends with
-; "/sleep-<number>.png", the mod swaps the number for one of 1..gbaSleepCount,
-; chosen by the current second, every time the sleep window shows.
+; "/sleep-<number>.png", the mod swaps the number for the next one of
+; 1..gbaSleepCount every time the sleep window shows. The counter lives in the
+; sleep window; if the window is created anew for every sleep, the counter
+; starts from the current second instead, and the journal line shows it.
 ; Pictures: /home/root/sleepscreen/sleep-1.png, sleep-2.png, ... Adding a
 ; picture means one more file and a new gbaSleepCount below.
 ; Source: sleep-rotate.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -13,12 +16,18 @@ AFFECT [[15136737896827182809]]
         LOCATE AFTER ALL
         INSERT {
             property ~&197088788&~ gbaSleepCount: 2
+            property ~&197088788&~ gbaSleepIndex: -1
 
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&6504254477&~
                 function ~&13733777459642361598&~() {
                     ~&5972376&~ (~&6504254477&~.~&233748328658231&~) {
+                        ~&214622607920&~ fresh = ~&6504254477&~.gbaSleepIndex < 0;
+                        ~&6504254477&~.gbaSleepIndex = fresh
+                            ? ~&6502909715&~.~&214626058827&~(~&6502586279&~.now() / 1000) % ~&6504254477&~.gbaSleepCount
+                            : (~&6504254477&~.gbaSleepIndex + 1) % ~&6504254477&~.gbaSleepCount;
                         ~&6504038586&~.~&7083172477658&~ = ~&6504254477&~.~&16364404249624396525&~();
+                        ~&233724020023100&~.~&197092075&~("sleep-rotate: picture " + (~&6504254477&~.gbaSleepIndex + 1) + (fresh ? " (counter started)" : " (next)"));
                     }
                 }
             }
@@ -29,9 +38,8 @@ AFFECT [[15136737896827182809]]
                 ~&197091758&~ ~&6504167510&~ = ~&6504254477&~.~&254534055152396035&~.~&8043263189855313455&~;
                 ~&214622607920&~ cut = ~&6504167510&~.lastIndexOf("/sleep-");
                 ~&5972376&~ (cut >= 0 && ~&6504254477&~.gbaSleepCount > 0) {
-                    ~&214622607920&~ pick = 1 + ~&6502909715&~.~&214626058827&~(~&6502586279&~.now() / 1000) % ~&6504254477&~.gbaSleepCount;
+                    ~&214622607920&~ pick = 1 + ~&6502909715&~.max(0, ~&6504254477&~.gbaSleepIndex) % ~&6504254477&~.gbaSleepCount;
                     ~&6504167510&~ = ~&6504167510&~.~&254548200562243306&~(0, cut) + "/sleep-" + pick + ".png";
-                    ~&233724020023100&~.~&197092075&~("sleep-rotate: " + ~&6504167510&~);
                 }
                 ~&5972376&~ (!~&6504167510&~.~&8400089168236034054&~("file:")) {
                     ~&6504167510&~ = "file://" + ~&6504167510&~;
