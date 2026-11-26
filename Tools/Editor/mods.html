@@ -3,61 +3,81 @@
 <style>
   /* Палитра та же, что у «Выбора вариантов». */
   :root { --ink: #9a4a2c; --ink-wash: rgba(196,120,80,.10); --frame: #e3d9cc; --frame-main: #d9b9a0;
-          --pick: #e4eedf; --pick-line: #a9c4a4; --warn: #f6ead2; --warn-line: #d9b46a; --bad: #f4dcd6; --bad-line: #d39a8c;
-          --muted-bg: rgba(127,127,127,.05); --on: #4f7f48; --off: #a0634f; }
+          --pend: #fbf1e4; --warn: #f6ead2; --warn-line: #d9b46a; --bad: #f4dcd6; --bad-line: #d39a8c;
+          --muted-bg: rgba(127,127,127,.05); --on: #4f8a47; --off: #a0634f; --knob: #fff; }
   :root[data-color-mode="dark"], :root[data-theme-tone="dark"] {
           --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --frame: #3b3631; --frame-main: #6b4f3e;
-          --pick: #2c3a2a; --pick-line: #4f6a4b; --warn: #3a3222; --warn-line: #7a6435; --bad: #3d2824; --bad-line: #7a4a3f;
-          --muted-bg: rgba(255,255,255,.03); --on: #8fbf86; --off: #d08a7a; }
+          --pend: #33291f; --warn: #3a3222; --warn-line: #7a6435; --bad: #3d2824; --bad-line: #7a4a3f;
+          --muted-bg: rgba(255,255,255,.03); --on: #79b070; --off: #d08a7a; --knob: #ddd; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-color-mode]):not([data-theme-tone]) {
           --ink: #e2a985; --ink-wash: rgba(226,169,133,.10); --frame: #3b3631; --frame-main: #6b4f3e;
-          --pick: #2c3a2a; --pick-line: #4f6a4b; --warn: #3a3222; --warn-line: #7a6435; --bad: #3d2824; --bad-line: #7a4a3f;
-          --muted-bg: rgba(255,255,255,.03); --on: #8fbf86; --off: #d08a7a; }
+          --pend: #33291f; --warn: #3a3222; --warn-line: #7a6435; --bad: #3d2824; --bad-line: #7a4a3f;
+          --muted-bg: rgba(255,255,255,.03); --on: #79b070; --off: #d08a7a; --knob: #ddd; }
   }
   html, body { height: 100%; }
   body { margin: 0; display: flex; flex-direction: column;
          background: var(--background-color-default, #fff); color: var(--text-color-default, #1f2328);
          font-family: var(--font-sans, "Segoe UI", sans-serif); font-size: 14px; line-height: 20px; }
   header { padding: 12px 16px 10px; border-bottom: 1px solid var(--frame); }
-  h1 { margin: 0 0 4px; font-size: 20px; line-height: 26px; font-weight: 600; }
-  .sum { color: var(--text-color-muted, #666); font-size: 13px; margin-bottom: 8px; }
+  .top { display: flex; align-items: center; gap: 8px; }
+  h1 { margin: 0; font-size: 20px; line-height: 26px; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sum { flex: none; color: var(--text-color-muted, #666); font-size: 12px; line-height: 16px; padding: 4px 16px 6px; border-top: 1px solid var(--frame); }
   .sum b { color: var(--text-color-default, #1f2328); font-weight: 600; }
-  .bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   button { font: inherit; font-size: 13px; padding: 3px 12px; border-radius: 6px; cursor: pointer;
            border: 1px solid var(--frame); background: transparent; color: inherit; }
   button:hover:not(:disabled) { border-color: var(--frame-main); }
   button.main { border-color: var(--frame-main); background: var(--ink-wash); color: var(--ink); font-size: 14px; padding: 4px 16px; }
-  button:disabled { opacity: .55; cursor: default; }
-  .banner { margin: 8px 0 0; padding: 7px 10px; border-radius: 6px; font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .banner.warn { background: var(--warn); border: 1px solid var(--warn-line); }
-  .banner.bad { background: var(--bad); border: 1px solid var(--bad-line); white-space: pre-wrap; }
-  .banner.info { background: var(--muted-bg); border: 1px solid var(--frame); }
-  .banner .grow { flex: 1; }
+  button.xbtn { min-width: 11em; }
+  .dep { font-size: 11px; color: var(--text-color-muted, #666); cursor: help; }
+  .checked { white-space: nowrap; }
+  .applied { font-size: 12.5px; line-height: 18px; }
+  .applied .gh { color: var(--text-color-muted, #666); }
+  .applied .gk { color: var(--text-color-muted, #666); display: inline-block; min-width: 6.5em; }
+  .checked.ok { color: var(--on); } .checked.up { color: var(--ink); }
+  .checked a { color: inherit; cursor: pointer; text-decoration: underline dotted; }
+  button.icon { font-size: 16px; padding: 1px 9px; line-height: 22px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .box { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+         background: var(--muted-bg); border: 1px solid var(--frame); }
+  .box .grow { flex: 1; min-width: 200px; }
+  .box.warn { background: var(--warn); border-color: var(--warn-line); }
+  .box.bad { background: var(--bad); border-color: var(--bad-line); white-space: pre-wrap; }
+  .pill { font-weight: 600; } .pill.on { color: var(--on); } .pill.off { color: var(--off); }
+  .clock { font-family: Consolas, monospace; font-size: 18px; font-weight: 600; }
   main { flex: 1; overflow: auto; padding: 0 16px 16px; }
-  h2 { font-size: 15px; margin: 18px 0 2px; font-weight: 600; }
+  h2 { font-size: 15px; margin: 18px 0 2px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+  h2 .all { font-size: 12px; font-weight: 400; color: var(--text-color-muted, #666); }
+  h2 .all a { color: var(--ink); cursor: pointer; text-decoration: underline dotted; }
   .hint { font-size: 12px; color: var(--text-color-muted, #666); margin-bottom: 4px; }
-  .row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--frame); }
+  .row { display: grid; grid-template-columns: 48px 1fr auto; gap: 2px 10px; padding: 8px 6px; border-bottom: 1px solid var(--frame); align-items: start; }
+  .row.pend { background: var(--pend); }
   .name b { font-weight: 600; overflow-wrap: anywhere; }
-  .tag { font-size: 11px; color: var(--text-color-muted, #666); margin-left: 6px; }
+  .will { font-size: 12px; color: var(--ink); font-weight: 600; white-space: nowrap; margin-right: auto; line-height: 24px; }
   .desc { font-size: 12.5px; line-height: 17px; color: var(--text-color-muted, #666); }
   .meta { font-size: 12px; line-height: 17px; color: var(--text-color-muted, #666); }
   .meta .v { font-family: Consolas, monospace; }
-  .meta .up { color: var(--ink); }
-  .meta .badv { color: var(--off); }
-  .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-  .state { font-size: 12.5px; white-space: nowrap; }
-  .state.on { color: var(--on); } .state.off { color: var(--off); } .state.mid { color: var(--ink); }
-  .acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-  .act { font-size: 12px; padding: 1px 9px; border-radius: 11px; }
-  .act.on { background: var(--pick); border-color: var(--pick-line); }
-  .act.danger.on { background: var(--bad); border-color: var(--bad-line); }
+  .meta .up { color: var(--ink); } .meta .badv { color: var(--off); }
+  .acts { display: flex; gap: 4px; justify-content: flex-end; align-items: center; min-height: 24px; }
+  .acts button { padding: 1px 8px; font-size: 13px; }
+  .acts button.on { background: var(--pend); border-color: var(--ink); color: var(--ink); }
+  /* Переключатель: показывает, каким мод будет после «Применить». */
+  .sw { width: 40px; height: 22px; padding: 0; border-radius: 11px; position: relative; margin-top: 1px;
+        background: var(--frame); border: 1px solid var(--frame-main); }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+               background: var(--knob); box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .12s; }
+  .sw.on { background: var(--on); border-color: var(--on); }
+  .sw.on::after { left: 20px; }
+  .sw.pend { outline: 2px dashed var(--ink); outline-offset: 2px; }
+  .nosw { font-size: 11px; color: var(--text-color-muted, #666); }
   details summary { cursor: pointer; font-size: 15px; font-weight: 600; margin: 18px 0 4px; }
   .filter { font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 6px; width: 16em;
             border: 1px solid var(--frame); background: var(--muted-bg); color: inherit; margin-bottom: 4px; }
-  footer { border-top: 1px solid var(--frame); padding: 8px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-  footer label { font-size: 13px; color: var(--text-color-muted, #666); cursor: pointer; user-select: none; }
-  footer .plan { flex: 1; font-size: 12.5px; color: var(--text-color-muted, #666); }
+  footer { border-top: 1px solid var(--frame); padding: 0 16px; height: 48px; flex: none; display: flex; gap: 10px; align-items: center; }
+  footer .plan { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  footer button.main { min-width: 9.5em; }
+  footer .plan .none { color: var(--text-color-muted, #666); }
+  footer label { font-size: 12.5px; color: var(--text-color-muted, #666); cursor: pointer; user-select: none; }
   .log { font-family: Consolas, monospace; font-size: 12px; line-height: 16px; white-space: pre-wrap; margin: 4px 0 0; }
   .idle { color: var(--text-color-muted, #666); padding: 20px 16px; }
 </style></head>
@@ -66,41 +86,56 @@
 <script>
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const api = (p, body) => fetch("/mods" + p, {method: "POST", body: JSON.stringify(body ?? {})}).then((r) => r.json());
-const NAMES = { enable: "включить", disable: "выключить", upgrade: "обновить", remove: "удалить", install: "поставить" };
-const XOVI = { on: "моды запущены", off: "интерфейс без модов", down: "интерфейс не запущен" };
+const WILL = { enable: "будет включён", disable: "будет выключен", upgrade: "будет обновлён", remove: "будет удалён", install: "будет поставлен" };
 
-let cur = null, shown = "", filter = "", catOpen = false, trialSafe = true, startMods = true, tick = 0, gotAt = 0;
+let cur = null, shown = "", filter = "", catOpen = false, tick = 0;
+const trialSafe = true;
+const rereadFor = {};
 
-async function load(p, body){
-  try { const v = await api(p, body); take(v); } catch(e){ }
-}
-function take(v){
-  cur = v; gotAt = Date.now();
-  const stamp = JSON.stringify(v);
-  if (stamp !== shown){ shown = stamp; render(); }
-}
-
+async function load(p, body){ try { take(await api(p, body)); } catch(e){ } }
+function take(v){ cur = v; const stamp = JSON.stringify(v); if (stamp !== shown){ shown = stamp; render(); } }
 function mmss(s){ s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2, "0"); }
-
-function stateCls(s){ return s === "включён" || s === "стоит" ? "on" : s === "выключен" || s === "не стоит" ? "off" : "mid"; }
+const items = () => cur?.status ? [...cur.status.items, ...cur.status.catalog] : [];
+const isOn = (it) => it.state === "включён" || it.state === "частично";
+const hasSwitch = (it) => it.kind === "mod" || it.kind === "third" || it.kind === "catalog";
+// Каким мод станет после «Применить».
+function target(it){
+  const c = it.choice;
+  if (c === "enable" || c === "install") return true;
+  if (c === "disable" || c === "remove") return false;
+  return isOn(it);
+}
 
 function rowHtml(it, locked){
+  const dis = locked ? "disabled" : "";
   const meta = [];
-  if (it.version) meta.push(`<span class="v">${esc(it.version)}</span>`);
-  if (it.fresh) meta.push(`<span class="up">→ <span class="v">${esc(it.fresh)}</span></span>`);
   if (it.kind !== "catalog" && it.kind !== "third" && !it.compatible) meta.push(`<span class="badv">не для этой прошивки (${esc(it.osRange)})</span>`);
-  if (it.kind !== "catalog" && it.kind !== "third" && it.noFresh) meta.push(`<span class="badv">в каталоге нет версии под эту прошивку</span>`);
-  if (it.kind === "catalog" && it.osRange) meta.push(`прошивка ${esc(it.osRange)}`);
-  if (it.needs?.length) meta.push("нужны: " + esc(it.needs.join(", ")));
-  if (it.requiredBy?.length) meta.push("нужен для: " + esc(it.requiredBy.join(", ")));
-  if (it.kind === "third") meta.push("источник: " + esc(it.source));
-  const acts = it.actions.map((a) =>
-    `<button class="act${it.choice === a ? " on" : ""}${a === "remove" ? " danger" : ""}" data-key="${esc(it.key)}" data-a="${a}" ${locked ? "disabled" : ""}>${NAMES[a]}</button>`).join("");
-  const state = it.kind === "catalog" ? "" : `<span class="state ${stateCls(it.state)}">${esc(it.state)}</span>`;
-  return `<div class="row"><div><div class="name"><b>${esc(it.name)}</b></div>` +
+  if (it.kind !== "catalog" && it.kind !== "third" && it.noFresh) meta.push(`<span class="badv">под эту прошивку версии нет</span>`);
+  // Версия и зависимости - только в подсказке на имени.
+  const tip = [
+    it.version ? "версия " + it.version : it.fresh ? "версия " + it.fresh : "",
+    it.fresh && it.kind !== "catalog" ? "есть " + it.fresh : "",
+    it.needs?.length ? "нужны: " + it.needs.join(", ") : "",
+    it.requiredBy?.length ? "нужен для: " + it.requiredBy.join(", ") : "",
+    it.kind === "third" ? "сторонний: " + it.source : "",
+  ].filter(Boolean).join("\n");
+  if (it.kind === "mod" && isOn(it) && cur.status.xovi !== "on") meta.push(`<span class="badv">файл на месте, но XOVI остановлен</span>`);
+  let sw = "";
+  if (hasSwitch(it)){
+    const t = target(it);
+    const pend = ["enable", "disable", "install"].includes(it.choice);
+    sw = `<button class="sw${t ? " on" : ""}${pend ? " pend" : ""}" data-sw="${esc(it.key)}" ${dis}
+      title="${t ? "включён" : "выключен"}${pend ? " (после «Применить»)" : ""}. Щелчок отмечает ${t ? "выключение" : "включение"}"></button>`;
+  } else sw = `<span class="nosw">служебн.</span>`;
+  const acts = [];
+  if (it.actions.includes("upgrade")) acts.push(`<button class="${it.choice === "upgrade" ? "on" : ""}" data-key="${esc(it.key)}" data-a="upgrade" ${dis} title="Отметить обновление до ${esc(it.fresh ?? "")}">⬆ обновить</button>`);
+  if (it.actions.includes("remove")) acts.push(`<button class="${it.choice === "remove" ? "on" : ""}" data-key="${esc(it.key)}" data-a="remove" ${dis} title="Отметить удаление">🗑</button>`);
+  const will = `<span class="will">${it.choice ? "→ " + WILL[it.choice].replace("будет ", "") : ""}</span>`;
+  const fullTip = [it.choice ? WILL[it.choice] + " после «Применить»" : "", tip].filter(Boolean).join("\n");
+  return `<div class="row${it.choice ? " pend" : ""}"${it.choice ? ` title="${WILL[it.choice]} после «Применить»"` : ""}><div>${sw}</div><div${fullTip ? ` title="${esc(fullTip)}"` : ""}><div class="name"><b>${esc(it.name)}</b></div>` +
     (it.desc ? `<div class="desc">${esc(it.desc)}</div>` : "") +
     (meta.length ? `<div class="meta">${meta.join(" · ")}</div>` : "") +
-    `</div><div class="side">${state}<div class="acts">${acts}</div></div></div>`;
+    `</div><div class="acts">${acts.join("")}</div></div>`;
 }
 
 function render(){
@@ -109,121 +144,146 @@ function render(){
   if (!v) return;
   const s = v.status;
   const locked = !!v.busy;
+  const dis = locked ? "disabled" : "";
   const filterHad = document.activeElement?.classList?.contains("filter");
   const scroll = root.querySelector("main")?.scrollTop ?? 0;
-  let h = `<header><h1>Моды Remarkable</h1>`;
+
+  let checked = "";
+  if (v.checked){
+    const at = new Date(v.checked.at).toLocaleTimeString().slice(0, 5);
+    const n = v.checked.updates.length;
+    checked = n
+      ? ` · <span class="checked up" title="${esc(v.checked.updates.join(", "))}">обновлений ${n} (${at}) · <a data-all="upgrade">отметить все</a></span>`
+      : ` · <span class="checked ok">✓ всё последнее (${at})</span>`;
+  }
+  let h = `<header><div class="top"><h1>Моды Remarkable</h1>
+    <button class="icon" data-do="refresh" ${dis} title="Перечитать планшет">⟳</button>
+    <button data-do="fetch" ${dis} title="Скачать свежий каталог Vellum и сравнить версии">Проверить обновления</button></div>`;
+  let sum = `Статус ещё не прочитан.`;
   if (s){
-    const ht = s.hashtab.running ? "пересобирается" : s.hashtab.os === s.os ? "под эту прошивку" : s.hashtab.os ? `<span style="color:var(--off)">от ${esc(s.hashtab.os)}</span>` : "неизвестно, от какой прошивки";
-    h += `<div class="sum">Прошивка <b>${esc(s.os)}</b> · ${XOVI[s.xovi] ?? esc(s.xovi)} · hashtab ${ht} · прочитано ${new Date(s.at).toLocaleTimeString()}</div>`;
-  } else h += `<div class="sum">Статус ещё не прочитан.</div>`;
-  h += `<div class="bar">
-    <button data-do="refresh" ${locked ? "disabled" : ""}>Обновить статус</button>
-    <button data-do="fetch" ${locked ? "disabled" : ""} title="vellum update: свежий каталог">Проверить обновления</button>
-    ${s && s.xovi === "on"
-      ? `<button data-do="off" ${locked ? "disabled" : ""}>Выключить все моды</button>`
-      : `<button data-do="on" ${locked ? "disabled" : ""} title="xovi/start, со страховкой">Запустить моды</button>`}
-    <button data-do="rebuild" ${locked || s?.hashtab.running ? "disabled" : ""} title="Нужен после обновления прошивки: на планшете попросит PIN">Пересобрать hashtab</button>
-  </div>`;
+    const ht = s.hashtab.running ? "пересобирается" : s.hashtab.os === s.os ? "✓" : s.hashtab.os ? `<span class="pill off">от ${esc(s.hashtab.os)}</span>` : "?";
+    sum = `Прошивка <b>${esc(s.os)}</b> · таблица имён ${ht} · прочитано ${new Date(s.at).toLocaleTimeString().slice(0, 5)}${checked}`;
+    const on = s.xovi === "on";
+    h += `<div class="box"><span class="grow"><b>XOVI</b>, загрузчик модов: <span class="pill ${on ? "on" : "off"}">${on ? "работает" : "остановлен"}</span>.
+      Без него не работает ни один мод.</span>
+      ${on ? `<button class="xbtn" data-do="off" ${dis}>Остановить XOVI</button>` : `<button class="main xbtn" data-do="on" ${dis}>Запустить XOVI</button>`}</div>`;
+  }
+
   if (s?.trial){
     const left = (s.trial.end - Date.now()) / 1000;
-    h += `<div class="banner warn"><span class="grow">Страховка идёт: если не подтвердить, моды выключатся сами через <b id="left">${mmss(left)}</b>.</span>
-      <button class="main" data-do="confirm" ${locked ? "disabled" : ""}>Всё в порядке</button>
-      <button data-do="off" ${locked ? "disabled" : ""}>Выключить сейчас</button></div>`;
+    h += `<div class="box warn" title="Не подтвердишь - XOVI остановится сам и моды выключатся"><span class="grow">Проверка: моды выключатся через <span class="clock" id="left">${mmss(left)}</span></span>
+      <button class="main" data-do="confirm" ${dis}>Всё работает</button></div>`;
   } else if (s?.trialLast){
     const t = s.trialLast, at = t.at ? new Date(t.at).toLocaleTimeString().slice(0, 5) : "";
     const txt = {
-      fired: [`bad`, `Страховка сработала в ${at}: подтверждения не было, моды выключены.`],
-      confirmed: [`info`, `Страховка снята в ${at}: ты подтвердил, моды остались.`],
-      cancelled: [`info`, `Страховка отменена в ${at}: моды выключены или запущены без неё.`],
-      reboot: [`warn`, `Страховка пропала: планшет перезагружался, пока она шла. После перезагрузки моды выключены, пока их не запустить.`],
+      fired: ["off", `проверка ${at} истекла, XOVI остановлен`],
+      confirmed: ["on", `проверка ${at} подтверждена`],
+      cancelled: ["", `проверка ${at} снята`],
+      reboot: ["off", "проверка оборвалась перезагрузкой, XOVI остановлен"],
     }[t.kind];
-    if (txt) h += `<div class="banner ${txt[0]}">${esc(txt[1])}</div>`;
+    if (txt) sum += ` · <span class="pill ${txt[0]}" style="font-weight:400">${esc(txt[1])}</span>`;
   }
   if (s && s.hashtab.os && s.hashtab.os !== s.os && !s.hashtab.running)
-    h += `<div class="banner warn">hashtab собран под ${esc(s.hashtab.os)}, а прошивка ${esc(s.os)}: перед модами пересобери его.</div>`;
-  if (s?.hashtab.running)
-    h += `<div class="banner warn">Пересобираю hashtab: введи PIN на планшете. Интерфейс сам поднимется без модов.</div>`;
-  if (v.busy) h += `<div class="banner info">Занята: ${esc(v.busy)}…</div>`;
-  if (v.error) h += `<div class="banner bad">${esc(v.error)}</div>`;
-  if (v.last && v.log?.length) h += `<details class="banner info"><summary style="font-size:13px;font-weight:400;margin:0">Последнее применение, ${new Date(v.last.at).toLocaleTimeString()}: ${esc(v.last.done.join("; ") || "перезапуск")}</summary><div class="log">${esc(v.log.join("\n"))}</div></details>`;
+    h += `<div class="box warn"><span class="grow">Прошивка обновилась (${esc(s.hashtab.os)} → ${esc(s.os)}): модам нужна новая таблица имён. Пересборка попросит PIN на планшете.</span>
+      <button data-do="rebuild" ${dis}>Пересобрать</button></div>`;
+  if (s?.hashtab.running) h += `<div class="box warn">Пересобираю таблицу имён: введи PIN на планшете. Интерфейс сам поднимется без модов.</div>`;
+  if (v.error) h += `<div class="box bad">${esc(v.error)}</div>`;
+  if (v.last && v.log?.length){
+    const DONE = { enable: "включены", disable: "выключены", upgrade: "обновлены", remove: "удалены", install: "поставлены" };
+    let g = v.last.groups;
+    if (!g){
+      const RU = { "включить": "enable", "выключить": "disable", "обновить": "upgrade", "удалить": "remove", "поставить": "install" };
+      g = {};
+      for (const d of v.last.done ?? []){ const [n, a] = d.split(" → "); (g[RU[a]] ??= []).push(n); }
+    }
+    const lines = Object.keys(DONE).filter((a) => g[a]?.length)
+      .map((a) => `<div><span class="gk">${DONE[a]}:</span> ${esc(g[a].join(", "))}</div>`).join("");
+    h += `<div class="box applied" title="${esc(v.log.join("\n"))}"><div class="grow"><div class="gh">Применено в ${new Date(v.last.at).toLocaleTimeString().slice(0, 5)}</div>${lines}</div></div>`;
+  }
   h += `</header><main>`;
+
   if (s){
-    const group = (kind) => s.items.filter((i) => kind.includes(i.kind)).sort((a, b) => a.name.localeCompare(b.name));
+    const group = (kinds) => s.items.filter((i) => kinds.includes(i.kind)).sort((a, b) => a.name.localeCompare(b.name));
     const mods = group(["mod"]), third = group(["third"]), util = group(["utility", "system"]);
-    h += `<h2>Моды</h2><div class="hint">Пакеты Vellum, которые меняют интерфейс. «Выключить» убирает файлы мода в xovi/disabled-mods, пакет остаётся.</div>`;
+    h += `<h2>Моды <span class="all">отметить все: <a data-all="on">включить</a> · <a data-all="off">выключить</a></span></h2>`;
     h += mods.map((i) => rowHtml(i, locked)).join("") || `<div class="hint">нет</div>`;
     if (third.length){
-      h += `<h2>Сторонние</h2><div class="hint">Не из Vellum: подпапки Remarkable\\mods в Roll и чужие файлы на планшете. Ставятся копией файла.</div>`;
+      h += `<h2>Сторонние</h2>`;
       h += third.map((i) => rowHtml(i, locked)).join("");
     }
-    h += `<h2>Утилиты и служебное</h2><div class="hint">XOVI, Vellum и обвязка: их только обновляют.</div>`;
+    h += `<h2>Служебное</h2>`;
     h += util.map((i) => rowHtml(i, locked)).join("");
     const f = filter.trim().toLowerCase();
     const cat = s.catalog.filter((i) => !f || i.name.includes(f) || i.desc.toLowerCase().includes(f));
-    h += `<details id="cat"${catOpen ? " open" : ""}><summary>Каталог Vellum: ${s.catalog.length} под эту прошивку</summary>
-      <input class="filter" placeholder="поиск" value="${esc(filter)}">` +
-      cat.map((i) => rowHtml(i, locked)).join("") + `</details>`;
+    h += `<details id="cat"${catOpen ? " open" : ""}><summary>Каталог Vellum: ${s.catalog.length} модов под эту прошивку</summary>
+      <input class="filter" placeholder="поиск" value="${esc(filter)}">` + cat.map((i) => rowHtml(i, locked)).join("") + `</details>`;
   }
   h += `</main>`;
-  const chosen = s ? [...s.items, ...s.catalog].filter((i) => i.choice) : [];
-  h += `<footer><span class="plan">${chosen.length ? esc(chosen.map((i) => `${i.name} → ${NAMES[i.choice]}`).join("; ")) : "Ничего не выбрано."}</span>
-    <label title="Через 3 минуты без «Всё в порядке» моды выключатся сами"><input type="checkbox" id="safe" ${trialSafe ? "checked" : ""}> страховка 3 мин</label>
-    <label title="После применения запустить моды (xovi/start); без галочки интерфейс поднимется чистым"><input type="checkbox" id="start" ${startMods ? "checked" : ""}> запустить моды</label>
-    <button class="main" data-do="apply" ${locked || !chosen.length ? "disabled" : ""}>Применить</button></footer>`;
+
+  const chosen = items().filter((i) => i.choice);
+  h += `<footer><span class="plan" title="${esc(chosen.map((i) => `${i.name} ${WILL[i.choice].replace("будет ", "")}`).join("\n"))}">${v.busy
+      ? `<b>Работаю:</b> ${esc(v.busy)}…`
+      : chosen.length
+      ? "<b>Отмечено:</b> " + esc(chosen.map((i) => `${i.name} ${WILL[i.choice].replace("будет ", "")}`).join("; "))
+      : `<span class="none">Ничего не отмечено.</span>`}</span>
+    <button data-do="reset" ${locked || !chosen.length ? "disabled" : ""}>Сбросить</button>
+    <button class="main" data-do="apply" ${locked || !chosen.length ? "disabled" : ""}>Применить${chosen.length ? " (" + chosen.length + ")" : ""}</button></footer>
+    <div class="sum">${sum}</div>`;
   root.innerHTML = h;
   root.querySelector("main").scrollTop = scroll;
   if (filterHad){ const el = root.querySelector(".filter"); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
 }
 
+function choose(key, action){
+  const it = items().find((i) => i.key === key);
+  if (it){ it.choice = action ?? ""; shown = ""; render(); }
+  load("/choose", { key, action });
+}
+
 document.addEventListener("click", async (e) => {
+  const all = e.target.closest("[data-all]");
+  if (all && !cur?.busy) return load("/choose-many", all.dataset.all === "upgrade" ? { upgrade: true } : { on: all.dataset.all === "on" });
   const b = e.target.closest("button");
   if (!b || b.disabled) return;
+  if (b.dataset.sw){
+    const it = items().find((i) => i.key === b.dataset.sw);
+    if (["enable", "disable", "install"].includes(it.choice)) return choose(it.key, null);
+    const want = !target(it);
+    const a = want ? (it.kind === "catalog" || it.state === "не стоит" ? "install" : "enable") : "disable";
+    return choose(it.key, it.actions.includes(a) ? a : null);
+  }
   if (b.dataset.key){
-    const it = [...cur.status.items, ...cur.status.catalog].find((i) => i.key === b.dataset.key);
-    const action = it.choice === b.dataset.a ? null : b.dataset.a;
-    return load("/choose", { key: b.dataset.key, action });
+    const it = items().find((i) => i.key === b.dataset.key);
+    return choose(it.key, it.choice === b.dataset.a ? null : b.dataset.a);
   }
   const d = b.dataset.do;
   if (!d) return;
   if (d === "apply"){
-    const n = [...cur.status.items, ...cur.status.catalog].filter((i) => i.choice).length;
-    const note = startMods ? "Интерфейс перезапустится, открытый документ закроется." : "Интерфейс перезапустится без модов.";
-    if (!confirm(`Применить ${n} действ.? ${note}`)) return;
+    const n = items().filter((i) => i.choice).length;
+    if (!confirm(`Применить ${n} изм.? Интерфейс планшета перезапустится, открытый документ закроется.` + (trialSafe ? " Потом 10 минут на проверку." : ""))) return;
     cur.busy = "применяю"; render();
-    return load("/apply", { trial: trialSafe, start: startMods });
+    return load("/apply", { trial: trialSafe });
   }
   if (d === "rebuild" && !confirm("Интерфейс остановится, на планшете появится экран PIN: введи его. Потом интерфейс поднимется без модов. Начать?")) return;
-  if ((d === "on" || d === "off") && !confirm(d === "on" ? "Запустить моды? Интерфейс перезапустится." : "Выключить все моды? Интерфейс перезапустится.")) return;
+  if (d === "on" && !confirm("Запустить XOVI? Интерфейс перезапустится, заработают включённые моды." + (trialSafe ? " Потом 10 минут на проверку." : ""))) return;
+  if (d === "off" && !confirm("Остановить XOVI? Интерфейс перезапустится без модов. Какие моды включены, запомнится.")) return;
   const map = { refresh: ["/refresh", {}], fetch: ["/refresh", { fetch: true }], on: ["/xovi", { on: true, trial: trialSafe }],
-                off: ["/xovi", { on: false }], confirm: ["/confirm", {}], rebuild: ["/rebuild", {}] };
-  cur.busy = b.textContent.toLowerCase(); render();
+                off: ["/xovi", { on: false }], confirm: ["/confirm", {}], rebuild: ["/rebuild", {}], reset: ["/reset", {}] };
+  if (d !== "reset"){ cur.busy = (b.title || b.textContent).trim().toLowerCase(); render(); }
   load(...map[d]);
 });
-document.addEventListener("change", (e) => {
-  if (e.target.id === "safe") trialSafe = e.target.checked;
-  if (e.target.id === "start") startMods = e.target.checked;
-});
-document.addEventListener("input", (e) => {
-  if (e.target.classList.contains("filter")){ filter = e.target.value; shown = ""; render(); }
-});
+document.addEventListener("input", (e) => { if (e.target.classList.contains("filter")){ filter = e.target.value; shown = ""; render(); } });
 document.addEventListener("toggle", (e) => { if (e.target.id === "cat") catOpen = e.target.open; }, true);
 
 setInterval(() => {
   const el = document.getElementById("left");
   const trial = cur?.status?.trial;
   if (el && trial) el.textContent = mmss((trial.end - Date.now()) / 1000);
-  // Срок вышел: через 10 с планшет уже откатил, перечитываю его сама.
-  if (trial && Date.now() > trial.end + 10000 && !cur.busy && !rereadFor[trial.end]){
-    rereadFor[trial.end] = true;
-    load("/refresh", {});
-  }
+  // Срок вышел: через 10 с планшет уже откатил, перечитываю сама.
+  if (trial && Date.now() > trial.end + 10000 && !cur.busy && !rereadFor[trial.end]){ rereadFor[trial.end] = true; load("/refresh", {}); }
   if (++tick % 3 === 0) load("/state");
 }, 1000);
-const rereadFor = {};
 
-(async () => {
-  await load("/state");
-  if (!cur?.status && !cur?.busy) load("/refresh", {});
-})();
+(async () => { await load("/state"); if (!cur?.status && !cur?.busy) load("/refresh", {}); })();
 </script>
 </body></html>

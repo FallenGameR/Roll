@@ -21,7 +21,7 @@ const Q = `${X}/exthome/qt-resource-rebuilder`;
 const E = `${X}/extensions.d`;
 const D = `${X}/disabled-mods`;
 const VELLUM = "/home/root/.vellum/bin/vellum";
-const TRIAL_SECONDS = 180;
+const TRIAL_SECONDS = 600;
 
 const SYSTEM = new Set(["xovi", "xovi-extensions", "qt-resource-rebuilder", "qt-command-executor",
     "xovi-message-broker", "vellum", "vellum-bash-completion", "remarkable-os", "rmpp"]);
@@ -381,7 +381,7 @@ function view() {
     const st = mem.status;
     const decorate = (it) => ({ ...it, actions: actionsFor(it), choice: mem.choices[it.key] ?? "" });
     return {
-        busy: mem.busy, log: mem.log, error: mem.error, last: mem.last,
+        busy: mem.busy, log: mem.log, error: mem.error, last: mem.last, checked: mem.checked ?? null,
         status: st && {
             ...st,
             items: st.items.map(decorate),
@@ -441,7 +441,7 @@ async function apply(session, opts) {
         const plan = Object.entries(chosen)
             .map(([k, a]) => ({ it: all.find((x) => x.key === k), a }))
             .filter((p) => p.it && actionsFor(p.it).includes(p.a));
-        if (!plan.length && opts.start === undefined) throw fail("empty", "Ничего не выбрано.");
+        if (!plan.length) throw fail("empty", "Ничего не отмечено.");
 
         const pkgs = (a) => plan.filter((p) => p.a === a && p.it.source === "vellum").map((p) => p.it.name);
         const del = pkgs("remove"), add = pkgs("install"), upg = pkgs("upgrade");
@@ -458,7 +458,15 @@ async function apply(session, opts) {
         }
 
         const trial = opts.trial !== false;
-        const start = opts.start ?? true;
+        // XOVI после применения работает, если останется хоть один включённый мод.
+        const willOn = (it) => {
+            const a = chosen[it.key];
+            if (a === "disable" || a === "remove") return false;
+            if (a === "enable" || a === "install") return true;
+            return it.state === "включён" || it.state === "частично";
+        };
+        const start = [...mem.status.items.filter((i) => i.kind === "mod" || i.kind === "third"), ...plan.filter((p) => p.it.kind === "catalog").map((p) => p.it)]
+            .some(willOn);
         let script = "V=" + VELLUM + "\n";
         if (trial && start) script += ARM;
         if (del.length) script += `echo "@@LOG vellum del ${del.join(" ")}"; $V del ${del.map(q).join(" ")} 2>&1 </dev/null\n`;
@@ -494,21 +502,52 @@ async function apply(session, opts) {
         if (!trial && start) moves += DISARM("cancelled");
         const r2 = await ssh(moves, 60000);
         mem.log.push(...logLines(r2.out));
-        mem.log.push(start ? "моды запущены (xovi/start)" : "интерфейс перезапущен без модов");
-        if (start && trial) mem.log.push(`страховка: ${TRIAL_SECONDS / 60} мин, потом моды выключатся сами`);
+        mem.log.push(start ? "XOVI запущен с модами" : "включённых модов не осталось, XOVI остановлен");
+        if (start && trial) mem.log.push(`проверка: ${TRIAL_SECONDS / 60} мин, без подтверждения моды выключатся сами`);
 
         const done = plan.map((p) => `${p.it.name} → ${ACTION_NAMES[p.a]}`);
         mem.choices = {};
         await new Promise((r) => setTimeout(r, 4000));
         await refresh(false);
-        mem.last = { at: new Date().toISOString(), done, log: mem.log.slice(), anyOn: anyOn() };
+        const groups = {};
+        for (const p of plan) (groups[p.a] ??= []).push(p.it.name);
+        mem.last = { at: new Date().toISOString(), done, groups, log: mem.log.slice(), anyOn: anyOn() };
         await saveChoices(session);
         const msg = [`[Моды Remarkable] Мастер применил: ${done.join("; ") || "только перезапуск"}.`,
             ...mem.log.map((l) => "- " + l),
-            start && trial ? `Страховка заведена на ${TRIAL_SECONDS / 60} мин: ждёт «Всё в порядке» на панели.` : ""].filter(Boolean);
+            start && trial ? `Проверка на ${TRIAL_SECONDS / 60} мин: ждёт «Всё работает, оставить» на панели.` : ""].filter(Boolean);
         try { session?.send({ prompt: msg.join("\n") }).catch(() => {}); } catch { }
         return view();
     });
+}
+
+// Мод, которому нужен другой мод, без него не работает: включение тянет
+// за собой то, что ему нужно, выключение - то, что нуждается в нём.
+// Снятие отметки снимает и то, что было отмечено заодно.
+function linkDeps(key, action, prev) {
+    const mods = new Map((mem.status?.items ?? []).filter((i) => i.kind === "mod").map((i) => [i.name, i]));
+    const it = [...mods.values()].find((i) => i.key === key);
+    if (!it) return;
+    const on = (m) => m.state === "включён" || m.state === "частично";
+    const walk = (start, next, a, want) => {
+        const seen = new Set([start.name]);
+        const stack = [start];
+        while (stack.length) {
+            for (const n of next(stack.pop())) {
+                const m = mods.get(n);
+                if (!m || seen.has(n)) continue;
+                seen.add(n);
+                stack.push(m);
+                if (want === null) { if (mem.choices[m.key] === a) delete mem.choices[m.key]; }
+                else if (on(m) !== want && actionsFor(m).includes(a)) mem.choices[m.key] = a;
+            }
+        }
+    };
+    const needs = (m) => m.needs, users = (m) => m.requiredBy;
+    if (action === "enable") walk(it, needs, "enable", true);
+    else if (action === "disable" || action === "remove") walk(it, users, "disable", false);
+    else if (!action && prev === "enable") walk(it, needs, "enable", null);
+    else if (!action && (prev === "disable" || prev === "remove")) walk(it, users, "disable", null);
 }
 
 function notify(session, text) {
@@ -537,13 +576,20 @@ export const routes = {
     "/state": async ({ session }) => { await loadChoices(session); return view(); },
     "/refresh": async ({ session, body }) => {
         await loadChoices(session);
-        await busy(body.fetch ? "проверяю обновления" : "читаю статус", () => refresh(!!body.fetch));
+        await busy(body.fetch ? "проверяю обновления" : "читаю статус", async () => {
+            await refresh(!!body.fetch);
+            if (body.fetch) {
+                mem.checked = { at: new Date().toISOString(), updates: mem.status.items.filter((i) => i.fresh).map((i) => i.name) };
+            }
+        }).catch(() => {});
         await saveChoices(session);
         return view();
     },
     "/choose": async ({ session, body }) => {
         if (mem.busy) return view();
+        const prev = mem.choices[body.key];
         if (body.action) mem.choices[body.key] = body.action; else delete mem.choices[body.key];
+        linkDeps(body.key, body.action, prev);
         await saveChoices(session);
         return view();
     },
@@ -560,12 +606,32 @@ export const routes = {
         return view();
     },
     "/xovi": async ({ session, body }) => {
-        await busy(body.on ? "запускаю моды" : "выключаю моды", async () => {
-            await ssh(body.on ? (body.trial === false ? XOVI_ON : ARM + XOVI_ON) : DISARM("cancelled") + XOVI_OFF, 60000);
+        await busy(body.on ? "запускаю XOVI" : "останавливаю XOVI", async () => {
+            await ssh(body.on ? (body.trial === false ? DISARM("cancelled") : ARM) + XOVI_ON : DISARM("cancelled") + XOVI_OFF, 60000);
             await new Promise((r) => setTimeout(r, 4000));
             await refresh(false);
         }).catch(() => {});
-        notify(session, body.on ? "Мастер запустил моды (xovi/start)." : "Мастер выключил все моды.");
+        notify(session, body.on ? "Мастер запустил XOVI." : "Мастер остановил XOVI: моды выключены.");
+        return view();
+    },
+    "/choose-many": async ({ session, body }) => {
+        if (mem.busy || !mem.status) return view();
+        if (body.upgrade) {
+            for (const it of mem.status.items) if (it.fresh) mem.choices[it.key] = "upgrade";
+            await saveChoices(session);
+            return view();
+        }
+        for (const it of mem.status.items) {
+            if (it.kind !== "mod") continue;
+            const a = body.on ? (it.state === "включён" ? null : "enable") : (it.state === "выключен" ? null : "disable");
+            if (a && actionsFor(it).includes(a)) mem.choices[it.key] = a;
+            else if (mem.choices[it.key] === "enable" || mem.choices[it.key] === "disable") delete mem.choices[it.key];
+        }
+        await saveChoices(session);
+        return view();
+    },
+    "/reset": async ({ session }) => {
+        if (!mem.busy) { mem.choices = {}; await saveChoices(session); }
         return view();
     },
     "/rebuild": async ({ session }) => {
