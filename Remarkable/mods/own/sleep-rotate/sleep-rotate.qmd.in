@@ -1,35 +1,37 @@
-; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep,
-; in order: sleep-1, sleep-2, ..., then sleep-1 again.
+; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep.
 ; Works with the custom sleep screen: xochitl.conf [General] SleepScreenPath
 ; points at /home/root/sleepscreen/sleep-1.png. If the path ends with
 ; "/sleep-<number>.png", the mod swaps the number for the current one.
-; The sleep window is created anew for every sleep, so the counter is kept in
-; a file of its own, /home/root/sleepscreen/rotate.ini (QtCore Settings), and
-; moves on each time the window is created.
+; The sleep window is created anew for every sleep and keeps nothing, so the
+; number comes from the firmware's own Carousel object (root.carousel), which
+; the window already gets and which steps through
+; /usr/share/remarkable/carousel/sleep_Illustration_0N.png from sleep to sleep:
+; illustration N gives picture ((N - 1) % gbaSleepCount) + 1. If the carousel
+; path has no number, the current second decides.
+; Do not add a QtCore Settings here to keep a counter: on 3.29.1 the sleep
+; window then fails to load and the tablet sleeps with a blank screen.
 ; Pictures: /home/root/sleepscreen/sleep-1.png, sleep-2.png, ... Adding a
 ; picture means one more file and a new gbaSleepCount below.
 ; Source: sleep-rotate.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
 ; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
 
 AFFECT [[/qt/qml/xofm/modules/sleepscreen/qml/default/sleep-window-opaque.qml]]
-    IMPORT [[QtCore]] 6.0
     TRAVERSE [[BaseView]]#[[root]]
         LOCATE AFTER ALL
         INSERT {
             property ~&int&~ gbaSleepCount: 2
-            property ~&int&~ gbaSleepShown: 0
-
-            ~&Settings&~ {
-                ~&id&~: gbaSleepStore
-                ~&location&~: "file:///home/root/sleepscreen/rotate.ini"
-                property ~&int&~ next: 0
+            property ~&string&~ gbaCarouselPath: ~&root&~.~&carousel&~ ? ("" + ~&root&~.~&carousel&~.~&imagePath&~) : ""
+            property ~&int&~ gbaSleepShown: {
+                ~&const&~ dot = ~&root&~.gbaCarouselPath.lastIndexOf(".png");
+                ~&const&~ n = dot > 0 ? ~&parseInt&~(~&root&~.gbaCarouselPath.~&substring&~(dot - 1, dot)) : 0;
+                ~&if&~ (n > 0) {
+                    ~&return&~ (n - 1) % ~&root&~.gbaSleepCount;
+                }
+                ~&return&~ ~&Math&~.~&floor&~(~&Date&~.now() / 1000) % ~&root&~.gbaSleepCount;
             }
 
             ~&Component&~.~&onCompleted&~: {
-                ~&root&~.gbaSleepShown = gbaSleepStore.next % ~&root&~.gbaSleepCount;
-                gbaSleepStore.next = (~&root&~.gbaSleepShown + 1) % ~&root&~.gbaSleepCount;
-                ~&logo&~.~&source&~ = ~&root&~.~&makeSleepScreenPath&~();
-                ~&console&~.~&log&~("sleep-rotate: picture " + (~&root&~.gbaSleepShown + 1));
+                ~&console&~.~&log&~("sleep-rotate: picture " + (~&root&~.gbaSleepShown + 1) + ", carousel " + ~&root&~.gbaCarouselPath);
             }
         }
 

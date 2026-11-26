@@ -1,35 +1,37 @@
-; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep,
-; in order: sleep-1, sleep-2, ..., then sleep-1 again.
+; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep.
 ; Works with the custom sleep screen: xochitl.conf [General] SleepScreenPath
 ; points at /home/root/sleepscreen/sleep-1.png. If the path ends with
 ; "/sleep-<number>.png", the mod swaps the number for the current one.
-; The sleep window is created anew for every sleep, so the counter is kept in
-; a file of its own, /home/root/sleepscreen/rotate.ini (QtCore Settings), and
-; moves on each time the window is created.
+; The sleep window is created anew for every sleep and keeps nothing, so the
+; number comes from the firmware's own Carousel object (root.carousel), which
+; the window already gets and which steps through
+; /usr/share/remarkable/carousel/sleep_Illustration_0N.png from sleep to sleep:
+; illustration N gives picture ((N - 1) % gbaSleepCount) + 1. If the carousel
+; path has no number, the current second decides.
+; Do not add a QtCore Settings here to keep a counter: on 3.29.1 the sleep
+; window then fails to load and the tablet sleeps with a blank screen.
 ; Pictures: /home/root/sleepscreen/sleep-1.png, sleep-2.png, ... Adding a
 ; picture means one more file and a new gbaSleepCount below.
 ; Source: sleep-rotate.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
 ; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
 
 AFFECT [[15136737896827182809]]
-    IMPORT [[7081846004279]] 6.0
     TRAVERSE [[7711468349764991]]#[[6504254477]]
         LOCATE AFTER ALL
         INSERT {
             property ~&197088788&~ gbaSleepCount: 2
-            property ~&197088788&~ gbaSleepShown: 0
-
-            ~&7712198086779994&~ {
-                ~&5972374&~: gbaSleepStore
-                ~&7713275775090050&~: "file:///home/root/sleepscreen/rotate.ini"
-                property ~&197088788&~ next: 0
+            property ~&7083178290016&~ gbaCarouselPath: ~&6504254477&~.~&7712874732231975&~ ? ("" + ~&6504254477&~.~&7712874732231975&~.~&254533793748405209&~) : ""
+            property ~&197088788&~ gbaSleepShown: {
+                ~&214622607920&~ dot = ~&6504254477&~.gbaCarouselPath.lastIndexOf(".png");
+                ~&214622607920&~ n = dot > 0 ? ~&7713428776113935&~(~&6504254477&~.gbaCarouselPath.~&254548200562243306&~(dot - 1, dot)) : 0;
+                ~&5972376&~ (n > 0) {
+                    ~&7083121450889&~ (n - 1) % ~&6504254477&~.gbaSleepCount;
+                }
+                ~&7083121450889&~ ~&6502909715&~.~&214626058827&~(~&6502586279&~.now() / 1000) % ~&6504254477&~.gbaSleepCount;
             }
 
             ~&254480451320573660&~.~&495334332051582499&~: {
-                ~&6504254477&~.gbaSleepShown = gbaSleepStore.next % ~&6504254477&~.gbaSleepCount;
-                gbaSleepStore.next = (~&6504254477&~.gbaSleepShown + 1) % ~&6504254477&~.gbaSleepCount;
-                ~&6504038586&~.~&7083172477658&~ = ~&6504254477&~.~&16364404249624396525&~();
-                ~&233724020023100&~.~&197092075&~("sleep-rotate: picture " + (~&6504254477&~.gbaSleepShown + 1));
+                ~&233724020023100&~.~&197092075&~("sleep-rotate: picture " + (~&6504254477&~.gbaSleepShown + 1) + ", carousel " + ~&6504254477&~.gbaCarouselPath);
             }
         }
 

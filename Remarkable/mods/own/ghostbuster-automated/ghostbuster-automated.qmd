@@ -10,8 +10,10 @@
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
 ;   page turn that took long to draw   (DocumentView.qml: currentPage, isLoading);
-;   toolbar panel closed               (ToolbarFoldout.qml, visible)
+;   toolbar panel closed on a PDF page (ToolbarFoldout.qml, visible, toolbar.pdfPage)
 ;   toolbar hidden or collapsed        (DocumentView.qml: toolbar.shown, expanded)
+; The two document-view events work only on PDF pages (gbaHeavy): notebooks,
+; inserted note pages and EPUB never had ghosting.
 ;                                       heavy pages (graphics-rich PDFs) leave
 ;                                       ghosting, quick ones are left alone
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -27,6 +29,7 @@ AFFECT [[1224665461898798997]]
         LOCATE AFTER ALL
         INSERT {
             property ~&197088788&~ gbaSlowTurnMs: 400
+            property ~&6503679477&~ gbaHeavy: !!~&6504254477&~.~&7712934851008712&~ && ~&6504254477&~.~&7712934851008712&~.~&7713012671454059&~ === ~&7711571060833448&~.~&197061219&~ && !~&6504254477&~.~&7713361680718652&~
             property ~&7082585429636&~ gbaTurnAt: 0
 
             ~&233681166222244&~ {
@@ -55,7 +58,7 @@ AFFECT [[1224665461898798997]]
                     }
                     ~&214622607920&~ took = ~&6502586279&~.now() - ~&6504254477&~.gbaTurnAt;
                     ~&6504254477&~.gbaTurnAt = 0;
-                    ~&214622607920&~ slow = took > ~&6504254477&~.gbaSlowTurnMs;
+                    ~&214622607920&~ slow = took > ~&6504254477&~.gbaSlowTurnMs && ~&6504254477&~.gbaHeavy;
                     ~&233724020023100&~.~&197092075&~("gba: page turn " + took + " ms" + (slow ? ", refresh" : ""));
                     ~&5972376&~ (slow) {
                         gbaTurnTimer.~&233743006639214&~();
@@ -148,7 +151,7 @@ AFFECT [[15392681159132014986]]
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&6504254477&~
                 function ~&13733777459642361598&~() {
-                    ~&5972376&~ (!~&6504254477&~.~&233748328658231&~) {
+                    ~&5972376&~ (!~&6504254477&~.~&233748328658231&~ && ~&6504254477&~.~&233745975898428&~ && ~&6504254477&~.~&233745975898428&~.~&233740367856800&~) {
                         gbaFoldoutTimer.~&233743006639214&~();
                     }
                 }
@@ -176,12 +179,12 @@ AFFECT [[1224665461898798997]]
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&233745975898428&~
                 function onShownChanged() {
-                    ~&5972376&~ (!~&233745975898428&~.~&214641332312&~) {
+                    ~&5972376&~ (!~&233745975898428&~.~&214641332312&~ && ~&6504254477&~.gbaHeavy) {
                         gbaToolbarTimer.~&233743006639214&~();
                     }
                 }
                 function ~&2815617667007525497&~() {
-                    ~&5972376&~ (!~&233745975898428&~.~&7712989577739634&~) {
+                    ~&5972376&~ (!~&233745975898428&~.~&7712989577739634&~ && ~&6504254477&~.gbaHeavy) {
                         gbaToolbarTimer.~&233743006639214&~();
                     }
                 }

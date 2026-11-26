@@ -10,8 +10,10 @@
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
 ;   page turn that took long to draw   (DocumentView.qml: currentPage, isLoading);
-;   toolbar panel closed               (ToolbarFoldout.qml, visible)
+;   toolbar panel closed on a PDF page (ToolbarFoldout.qml, visible, toolbar.pdfPage)
 ;   toolbar hidden or collapsed        (DocumentView.qml: toolbar.shown, expanded)
+; The two document-view events work only on PDF pages (gbaHeavy): notebooks,
+; inserted note pages and EPUB never had ghosting.
 ;                                       heavy pages (graphics-rich PDFs) leave
 ;                                       ghosting, quick ones are left alone
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -27,6 +29,7 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
         LOCATE AFTER ALL
         INSERT {
             property ~&int&~ gbaSlowTurnMs: 400
+            property ~&bool&~ gbaHeavy: !!~&root&~.~&document&~ && ~&root&~.~&document&~.~&fileType&~ === ~&Document&~.~&Pdf&~ && !~&root&~.~&notePage&~
             property ~&double&~ gbaTurnAt: 0
 
             ~&Binding&~ {
@@ -55,7 +58,7 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
                     }
                     ~&const&~ took = ~&Date&~.now() - ~&root&~.gbaTurnAt;
                     ~&root&~.gbaTurnAt = 0;
-                    ~&const&~ slow = took > ~&root&~.gbaSlowTurnMs;
+                    ~&const&~ slow = took > ~&root&~.gbaSlowTurnMs && ~&root&~.gbaHeavy;
                     ~&console&~.~&log&~("gba: page turn " + took + " ms" + (slow ? ", refresh" : ""));
                     ~&if&~ (slow) {
                         gbaTurnTimer.~&restart&~();
@@ -148,7 +151,7 @@ AFFECT [[/qt/qml/xofm/libs/toolbar/qml/ToolbarFoldout.qml]]
             ~&Connections&~ {
                 ~&target&~: ~&root&~
                 function ~&onVisibleChanged&~() {
-                    ~&if&~ (!~&root&~.~&visible&~) {
+                    ~&if&~ (!~&root&~.~&visible&~ && ~&root&~.~&toolbar&~ && ~&root&~.~&toolbar&~.~&pdfPage&~) {
                         gbaFoldoutTimer.~&restart&~();
                     }
                 }
@@ -176,12 +179,12 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
             ~&Connections&~ {
                 ~&target&~: ~&toolbar&~
                 function onShownChanged() {
-                    ~&if&~ (!~&toolbar&~.~&shown&~) {
+                    ~&if&~ (!~&toolbar&~.~&shown&~ && ~&root&~.gbaHeavy) {
                         gbaToolbarTimer.~&restart&~();
                     }
                 }
                 function ~&onExpandedChanged&~() {
-                    ~&if&~ (!~&toolbar&~.~&expanded&~) {
+                    ~&if&~ (!~&toolbar&~.~&expanded&~ && ~&root&~.gbaHeavy) {
                         gbaToolbarTimer.~&restart&~();
                     }
                 }
