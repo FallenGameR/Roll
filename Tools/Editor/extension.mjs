@@ -18,14 +18,15 @@ process.on("unhandledRejection", (e) => process.stderr.write(`unhandled: ${e?.st
 // соседние файлы ищутся от настоящего пути этого файла.
 const HERE = dirname(realpathSync(fileURLToPath(import.meta.url)));
 
-// Три canvas на одном сервере: «Правка текста» (logic.mjs, editor.html) в
-// корне, «Выбор вариантов» (pick.mjs, pick.html) под /pick и «Сравнение
-// картинок» (look.mjs, look.html) под /look. Модули перечитываются при
-// каждом изменении файла.
+// Четыре canvas на одном сервере: «Правка текста» (logic.mjs, editor.html) в
+// корне, «Выбор вариантов» (pick.mjs, pick.html) под /pick, «Сравнение
+// картинок» (look.mjs, look.html) под /look и «Моды Remarkable» (mods.mjs,
+// mods.html) под /mods. Модули перечитываются при каждом изменении файла.
 const PARTS = {
     editor: { logic: join(HERE, "logic.mjs"), page: join(HERE, "editor.html") },
     pick: { logic: join(HERE, "pick.mjs"), page: join(HERE, "pick.html") },
     look: { logic: join(HERE, "look.mjs"), page: join(HERE, "look.html") },
+    mods: { logic: join(HERE, "mods.mjs"), page: join(HERE, "mods.html") },
 };
 const IMAGE_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 
@@ -57,7 +58,7 @@ async function ensureServer() {
     const http = createServer(async (req, res) => {
         try {
             const url = new URL(req.url, "http://x");
-            const part = ["pick", "look"].find((p) => url.pathname.startsWith("/" + p)) ?? "editor";
+            const part = ["pick", "look", "mods"].find((p) => url.pathname.startsWith("/" + p)) ?? "editor";
             const path = part === "editor" ? url.pathname : url.pathname.slice(part.length + 1) || "/";
             const route = (await logic(part)).routes[path];
             if (!route) {
@@ -231,6 +232,15 @@ session = await joinSession({
                 title: "Сравнение картинок",
                 url: (await ensureServer()) + "look?i=" + encodeURIComponent(ctx.instanceId),
             }),
+        }),
+        createCanvas({
+            id: "roll-mods",
+            displayName: "Моды Remarkable",
+            description: "Моды на планшете Remarkable: что стоит и включено, есть ли обновление и совместимость с прошивкой, зависимости; Мастер выбирает по каждому моду включить, выключить, обновить, удалить или поставить и применяет со страховкой автоотката.",
+            actions: [
+                action("status", "Прочитать планшет по SSH: прошивка, загружен ли XOVI, страховка, hashtab, и по каждому моду состояние, версия, свежая версия, совместимость и выбранное действие.", undefined, "mods"),
+            ],
+            open: async () => ({ title: "Моды Remarkable", url: (await ensureServer()) + "mods" }),
         }),
     ],
 });

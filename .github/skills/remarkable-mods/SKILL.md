@@ -25,6 +25,9 @@ XOVI не вшит в систему. Скрипт `/home/root/xovi/start` мо�
 один, из пресета RCU (`Tools\Remarkable\askpass.cmd`). Спящий планшет
 не отвечает ни так, ни так.
 
+Часы планшета и его журнал идут по UTC. Мастеру время называть в местном
+поясе компьютера, а не в том, что напечатал `date` на планшете.
+
 ## Выключить и включить
 - **Все моды:** `umount -q /etc/systemd/system/xochitl.service.d;
   systemctl daemon-reload; systemctl restart xochitl`.
@@ -80,6 +83,25 @@ qt-resource-rebuilder, qt-command-executor и xovi-message-broker.
 по одному, начиная с тех, у кого Vellum показывает версию под новую
 прошивку.
 
+## Тикет в поддержку о гоустинге
+26 ноября 2026, около 10:18, отправлен тикет через support.remarkable.com:
+Contact → Send us an email → Technical issues and help. Сайт ответил
+«Ticket Created!», номера на странице нет: он придёт письмом на
+alex.kostikov@gmail.com.
+
+- Модель Paper Pro, прошивка 3.29.1.1826, серийный номер RM05C004248035T
+  (взят из `journalctl`, строка `serial :`).
+- Суть: сильный зелёный и чёрный гоустинг на раннем Paper Pro, хуже на
+  сложных PDF, след виден уже на экране PIN; стало хуже после обновлений,
+  не прошло на 3.29.1. Спросили про ремонт или замену по гарантии или
+  покрытию Connect. Про моды и режим разработчика не писали; если спросят,
+  отвечать честно: включён, но гоустинг есть и на прошивке без модов.
+- Приложено фото `remarkable-ghosting.jpg`: после ввода PIN поверх
+  библиотеки остались «Enter passcode» и вся клавиатура. Оригинал из письма
+  Мастера себе с темой «Ghosting».
+
+Ответ поддержки: пока нет. Когда придёт, дописать сюда дату и суть.
+
 ## Копии модов
 Расшифровка: `Remarkable\mods\decoded` — те же моды с именами вместо
 хешей и шапкой «что делает» по-русски. Папка в `.gitignore`: в ней
@@ -132,8 +154,14 @@ qt-resource-rebuilder и `start`. Перед этим папка целиком 
 ```sh
 Q=/home/root/xovi/exthome/qt-resource-rebuilder; M=ghostbuster-page.qmd
 touch /tmp/mod-trial
-setsid sh -c "sleep 180; [ -f /tmp/mod-trial ] && mv $Q/$M /home/root/xovi/disabled/ && /home/root/xovi/start" </dev/null >/dev/null 2>&1 &
+END=$(( $(date +%s) + 180 ))
+setsid sh -c "while [ \$(date +%s) -lt $END ]; do sleep 5; done; [ -f /tmp/mod-trial ] && mv $Q/$M /home/root/xovi/disabled/ && /home/root/xovi/start" </dev/null >/dev/null 2>&1 &
 ```
+
+Срок считается по часам, а не одним `sleep 180`: планшет между касаниями
+уходит в автосон, `sleep` во сне стоит, и трёхминутный таймер 26 ноября
+опоздал больше чем на минуту. После сна цикл замечает, что срок вышел, и
+откатывает сразу.
 
 Затем мод кладётся и делается `start`. Мастер за три минуты проверяет вход
 по PIN и пару страниц; если всё хорошо, `rm /tmp/mod-trial`, и таймер
