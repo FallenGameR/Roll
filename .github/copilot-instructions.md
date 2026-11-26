@@ -93,6 +93,15 @@ restart xochitl`): это закрывает открытый документ. 
 `Open-Remarkable`; инструкция к RCU - `C:\tools\RCU\User Manual.pdf`,
 CLI в главе 4.
 
+Планшет - Paper Pro (`reMarkable Ferrari`), на нём стоят пакетный
+менеджер Vellum (`/home/root/.vellum/bin/vellum`, обёртка над apk) и
+XOVI. В Windows у Vellum есть окно, `C:\tools\RCU\reManager.exe`, а из
+сессии с ним работают по SSH: `vellum list --installed`, `--upgradable`,
+`vellum add <мод>`, после обновления прошивки `vellum reenable`. По
+кабелю планшет отвечает на 10.11.99.1 тем же паролем из пресета.
+Устройство модов, как их выключать и сохранённый набор - скилл
+`remarkable-mods`; копии модов лежат в `Remarkable\mods`.
+
 ## Диктовка после обновления
 
 venv диктовки в `%LOCALAPPDATA%\Roll\dictation` сам за репозиторием

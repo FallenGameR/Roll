@@ -1,0 +1,2 @@
+LOAD ingatellent/scrollScreenUpOrDown.qmd
+LOAD ingatellent/tapToChangeViewOrPage.qmd
