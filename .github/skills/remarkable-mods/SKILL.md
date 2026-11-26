@@ -150,9 +150,13 @@ QML и 278 иконок в `ark\icons`. Это код reMarkable: класть �
 и `Connections` или `REBUILD` обработчика, который перезапускает таймер;
 по таймеру - `EPFramebuffer.clearGhosting()` (нужен `IMPORT com.remarkable`).
 Таймер нужен, чтобы перерисовать после того, как экран дорисовался.
-Имена в моде пишутся хешами из `hashtab`: хеш имени ищется по значению в
-таблице (`decode-qmd.py` делает обратное). Своих новых имён (id таймеров,
-свойства) в таблице нет, их пишут открытым текстом.
+Имена в моде пишутся хешами из `hashtab`. Свой мод пишут открытым
+текстом в `<имя>.qmd.in` рядом с готовым: имена прошивки в тех же скобках
+(`[[Имя]]`, `~&имя&~`), свои новые имена (id таймеров, свойства) без скобок.
+Готовый `.qmd` собирает `python Tools\Remarkable\encode-qmd.py <hashtab>
+<имя>.qmd.in <имя>.qmd`; имени, которого нет в таблице, он не пропустит.
+Правят только `.qmd.in`. `console.log("...")` в обработчике пишет в журнал
+`journalctl -u xochitl`: так видно, какое событие сработало.
 
 Прошивка сама сообщает своему объекту `GhostBuster` о части событий
 (`ghostBuster.viewChange(GhostBuster.<событие>)`): `SettingsOpened`
@@ -168,6 +172,7 @@ QML и 278 иконок в `ark\icons`. Это код reMarkable: класть �
 | Симптом | Файл | Зацепка |
 |---|---|---|
 | след после входа в настройки | `qml\device\view\settings\Settings.qml` | `function onOpened` |
+| первая отрисовка библиотеки после PIN | `xofm\modules\security\pincode\qml\UnlockWindow.qml` | окно скрылось (`onVisibleChanged`) |
 | след значка ожидания при открытии PDF | `qml\device\view\documentview\DocumentView.qml` | `Loading { id: loadingIndicator }`, видим при `isBusy`; ловить `onVisibleChanged` в `false` |
 | значки батареи, зарядки, синхронизации вверху справа не перерисовались в библиотеке | `qml\device\view\navigator\ContentHeader.qml` (`statusIndicators`), `Navigator.qml` | `Navigator` `onVisibleChanged` в `true` |
 | следы после ластика | `qml\device\view\documentview\DeviceSceneView.qml` | `onStrokeCompleted`, после `eraseWithLine` |

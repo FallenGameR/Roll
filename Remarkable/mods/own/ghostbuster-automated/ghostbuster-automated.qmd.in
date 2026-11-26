@@ -1,0 +1,146 @@
+; ghostbuster-automated.qmd - full screen refresh on its own, at the moments
+; where ghosting is left behind. Each event restarts a short timer, so the
+; refresh happens once, after the screen has finished drawing. Every trigger
+; writes "gba: <event>" to the xochitl journal, to see which one fired.
+; Events:
+;   settings opened                    (Settings.qml, onOpened)
+;   document stopped loading           (DocumentView.qml: isBusy, isLoading,
+;                                       loadingIndicator hidden)
+;   library shown again                (Navigator.qml, visible)
+;   PIN entered, unlock screen closed  (UnlockWindow.qml)
+; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
+; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
+
+; Settings opened
+AFFECT [[/qml/device/view/settings/Settings.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[Item]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaSettingsTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: settings opened");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+        }
+
+        REBUILD [[onOpened]]
+            LOCATE AFTER STREAM \~&ghostBuster&~.~&viewChange&~(~&GhostBuster&~.~&SettingsOpened&~);\ INSERT STREAM \ gbaSettingsTimer.~&restart&~();\
+        END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; Document stopped loading
+AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[FocusScope]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&string&~ gbaLoadingReason: ""
+
+            ~&Timer&~ {
+                ~&id&~: gbaLoadingTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: document loaded, " + ~&root&~.gbaLoadingReason);
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&loadingIndicator&~
+                function ~&onVisibleChanged&~() {
+                    ~&if&~ (!~&loadingIndicator&~.~&visible&~) {
+                        ~&root&~.gbaLoadingReason = "indicator hidden";
+                        gbaLoadingTimer.~&restart&~();
+                    }
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function onIsBusyChanged() {
+                    ~&if&~ (!~&root&~.~&isBusy&~) {
+                        ~&root&~.gbaLoadingReason = "busy over";
+                        gbaLoadingTimer.~&restart&~();
+                    }
+                }
+                function onIsLoadingChanged() {
+                    ~&if&~ (!~&root&~.~&isLoading&~) {
+                        ~&root&~.gbaLoadingReason = "loading over";
+                        gbaLoadingTimer.~&restart&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Library shown again
+AFFECT [[/qml/device/view/navigator/Navigator.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[FocusScope]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&bool&~ gbaReady: ~&false&~
+
+            ~&Component&~.~&onCompleted&~: {
+                ~&root&~.gbaReady = ~&true&~;
+            }
+
+            ~&Timer&~ {
+                ~&id&~: gbaLibraryTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&if&~ (~&root&~.~&visible&~) {
+                        ~&console&~.~&log&~("gba: library shown");
+                        ~&EPFramebuffer&~.clearGhosting();
+                    }
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function ~&onVisibleChanged&~() {
+                    ~&if&~ (~&root&~.~&visible&~ && ~&root&~.gbaReady) {
+                        gbaLibraryTimer.~&restart&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; PIN entered: the unlock screen closes and the library is drawn for the first time
+AFFECT [[/qt/qml/xofm/modules/security/pincode/qml/UnlockWindow.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[BaseView]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaUnlockTimer
+                ~&interval&~: 600
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: unlocked");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function ~&onVisibleChanged&~() {
+                    ~&if&~ (!~&root&~.~&visible&~) {
+                        gbaUnlockTimer.~&restart&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT

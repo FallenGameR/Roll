@@ -1,0 +1,146 @@
+; ghostbuster-automated.qmd - full screen refresh on its own, at the moments
+; where ghosting is left behind. Each event restarts a short timer, so the
+; refresh happens once, after the screen has finished drawing. Every trigger
+; writes "gba: <event>" to the xochitl journal, to see which one fired.
+; Events:
+;   settings opened                    (Settings.qml, onOpened)
+;   document stopped loading           (DocumentView.qml: isBusy, isLoading,
+;                                       loadingIndicator hidden)
+;   library shown again                (Navigator.qml, visible)
+;   PIN entered, unlock screen closed  (UnlockWindow.qml)
+; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
+; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
+
+; Settings opened
+AFFECT [[12599552112012170435]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[6502786168]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaSettingsTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: settings opened");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+        }
+
+        REBUILD [[7713401573498017]]
+            LOCATE AFTER STREAM \~&482865290967253827&~.~&8400213107195236010&~(~&433854763438791459&~.~&14038221081077499285&~);\ INSERT STREAM \ gbaSettingsTimer.~&233743006639214&~();\
+        END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; Document stopped loading
+AFFECT [[1224665461898798997]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&7083178290016&~ gbaLoadingReason: ""
+
+            ~&214604601930&~ {
+                ~&5972374&~: gbaLoadingTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: document loaded, " + ~&6504254477&~.gbaLoadingReason);
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&12173585954242770596&~
+                function ~&13733777459642361598&~() {
+                    ~&5972376&~ (!~&12173585954242770596&~.~&233748328658231&~) {
+                        ~&6504254477&~.gbaLoadingReason = "indicator hidden";
+                        gbaLoadingTimer.~&233743006639214&~();
+                    }
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function onIsBusyChanged() {
+                    ~&5972376&~ (!~&6504254477&~.~&7082784038440&~) {
+                        ~&6504254477&~.gbaLoadingReason = "busy over";
+                        gbaLoadingTimer.~&233743006639214&~();
+                    }
+                }
+                function onIsLoadingChanged() {
+                    ~&5972376&~ (!~&6504254477&~.~&254534022647302435&~) {
+                        ~&6504254477&~.gbaLoadingReason = "loading over";
+                        gbaLoadingTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Library shown again
+AFFECT [[8850026134298937527]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&6503679477&~ gbaReady: ~&214625660372&~
+
+            ~&254480451320573660&~.~&495334332051582499&~: {
+                ~&6504254477&~.gbaReady = ~&6504329801&~;
+            }
+
+            ~&214604601930&~ {
+                ~&5972374&~: gbaLibraryTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&5972376&~ (~&6504254477&~.~&233748328658231&~) {
+                        ~&233724020023100&~.~&197092075&~("gba: library shown");
+                        ~&6687579895491175043&~.clearGhosting();
+                    }
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function ~&13733777459642361598&~() {
+                    ~&5972376&~ (~&6504254477&~.~&233748328658231&~ && ~&6504254477&~.gbaReady) {
+                        gbaLibraryTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; PIN entered: the unlock screen closes and the library is drawn for the first time
+AFFECT [[5177080399408383139]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[7711468349764991]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaUnlockTimer
+                ~&7713147298280334&~: 600
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: unlocked");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function ~&13733777459642361598&~() {
+                    ~&5972376&~ (!~&6504254477&~.~&233748328658231&~) {
+                        gbaUnlockTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
