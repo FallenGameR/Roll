@@ -97,7 +97,7 @@ function take(v){ cur = v; const stamp = JSON.stringify(v); if (stamp !== shown)
 function mmss(s){ s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ":" + String(s%60).padStart(2, "0"); }
 const items = () => cur?.status ? [...cur.status.items, ...cur.status.catalog] : [];
 const isOn = (it) => it.state === "включён" || it.state === "частично";
-const hasSwitch = (it) => it.kind === "mod" || it.kind === "third" || it.kind === "catalog";
+const hasSwitch = (it) => it.kind === "mod" || it.kind === "third" || it.kind === "own" || it.kind === "catalog";
 // Каким мод станет после «Применить».
 function target(it){
   const c = it.choice;
@@ -109,15 +109,15 @@ function target(it){
 function rowHtml(it, locked){
   const dis = locked ? "disabled" : "";
   const meta = [];
-  if (it.kind !== "catalog" && it.kind !== "third" && !it.compatible) meta.push(`<span class="badv">не для этой прошивки (${esc(it.osRange)})</span>`);
-  if (it.kind !== "catalog" && it.kind !== "third" && it.noFresh) meta.push(`<span class="badv">под эту прошивку версии нет</span>`);
+  if (it.kind === "mod" && !it.compatible) meta.push(`<span class="badv">не для этой прошивки (${esc(it.osRange)})</span>`);
+  if (it.kind === "mod" && it.noFresh) meta.push(`<span class="badv">под эту прошивку версии нет</span>`);
   // Версия и зависимости - только в подсказке на имени.
   const tip = [
     it.version ? "версия " + it.version : it.fresh ? "версия " + it.fresh : "",
     it.fresh && it.kind !== "catalog" ? "есть " + it.fresh : "",
     it.needs?.length ? "нужны: " + it.needs.join(", ") : "",
     it.requiredBy?.length ? "нужен для: " + it.requiredBy.join(", ") : "",
-    it.kind === "third" ? "сторонний: " + it.source : "",
+    it.kind === "third" ? "сторонний: " + it.source : it.kind === "own" ? "свой: Remarkable\\mods\\own\\" + it.source : it.kind === "mod" ? "из Vellum" : "",
   ].filter(Boolean).join("\n");
   if (it.kind === "mod" && isOn(it) && cur.status.xovi !== "on") meta.push(`<span class="badv">файл на месте, но XOVI остановлен</span>`);
   let sw = "";
@@ -204,7 +204,11 @@ function render(){
 
   if (s){
     const group = (kinds) => s.items.filter((i) => kinds.includes(i.kind)).sort((a, b) => a.name.localeCompare(b.name));
-    const mods = group(["mod"]), third = group(["third"]), util = group(["utility", "system"]);
+    const mods = group(["mod"]), own = group(["own"]), third = group(["third"]), util = group(["utility", "system"]);
+    if (own.length){
+      h += `<h2>Свои</h2>`;
+      h += own.map((i) => rowHtml(i, locked)).join("");
+    }
     h += `<h2>Моды <span class="all">отметить все: <a data-all="on">включить</a> · <a data-all="off">выключить</a></span></h2>`;
     h += mods.map((i) => rowHtml(i, locked)).join("") || `<div class="hint">нет</div>`;
     if (third.length){

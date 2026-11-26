@@ -7,6 +7,8 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -49,7 +51,7 @@ const RU = {
     "ghostbuster-eraser.qmd": "Полная перерисовка после ластика.",
     "ghostbuster-settings.qmd": "Полная перерисовка при выходе из настроек.",
     "ghostbuster-global.qmd": "Тап пятью пальцами где угодно - перерисовка (EPFramebuffer.clearGhosting).",
-    "tapPageTurn.qmd": "Наш: тап по краю экрана листает. Склейка tap-to-change-view-or-page и scroll-screen-up-or-down в один файл; их самих тогда удалить.",
+    "tap-page-turn.qmd": "Когда панель скрыта, тап по левой или правой четверти экрана (ниже верхней трети) листает назад или вперёд; длинную страницу сначала прокручивает.",
 };
 
 const ACTION_NAMES = {
@@ -184,16 +186,21 @@ function sections(text) {
 }
 
 // Сторонний мод - подпапка Remarkable\mods со своим LICENSE, как у
-// ghostbuster-reloaded. Остальное там - копии модов Vellum и расшифровки.
+// ghostbuster-reloaded; свой - такая же подпапка в Remarkable\mods\own.
+// Остальное там - копии модов Vellum и расшифровки.
 function localThirdParty() {
     const out = [];
-    if (!existsSync(LOCAL_MODS)) return out;
-    for (const dir of readdirSync(LOCAL_MODS, { withFileTypes: true })) {
-        if (!dir.isDirectory() || !existsSync(join(LOCAL_MODS, dir.name, "LICENSE"))) continue;
-        for (const f of readdirSync(join(LOCAL_MODS, dir.name))) {
-            if (f.endsWith(".qmd")) out.push({ name: f, source: dir.name, local: join(LOCAL_MODS, dir.name, f) });
+    const scan = (root, own) => {
+        if (!existsSync(root)) return;
+        for (const dir of readdirSync(root, { withFileTypes: true })) {
+            if (!dir.isDirectory() || !existsSync(join(root, dir.name, "LICENSE"))) continue;
+            for (const f of readdirSync(join(root, dir.name))) {
+                if (f.endsWith(".qmd")) out.push({ name: f, source: dir.name, own, local: join(root, dir.name, f) });
+            }
         }
-    }
+    };
+    scan(LOCAL_MODS, false);
+    scan(join(LOCAL_MODS, "own"), true);
     return out;
 }
 
@@ -210,6 +217,7 @@ echo @@HASHTAB; cat ${X}/hashtab.os 2>/dev/null; [ -f /tmp/hashtab.running ] && 
 echo @@INSTALLED; cat /home/root/.vellum/lib/apk/db/installed
 echo @@INDEX; for f in /home/root/.vellum/etc/apk/cache/APKINDEX.*.tar.gz /home/root/.vellum/local-repo/*/APKINDEX.tar.gz; do [ -f "$f" ] && tar -xzOf "$f" APKINDEX; echo; done
 echo @@FILES; find ${Q} ${E} ${D} -type f 2>/dev/null
+echo @@SUMS; find ${Q} ${D} -name "*.qmd" -type f -exec md5sum {} + 2>/dev/null
 echo @@LOADERS; for f in ${Q}/_*.qmd; do [ -f "$f" ] && cat "$f"; echo; done
 echo @@END
 `;
@@ -224,6 +232,7 @@ async function fetchStatus(fetchIndex = false) {
 function build(s) {
     const os = s.OS.trim();
     const files = new Set(s.FILES.split("\n").map((l) => l.trim()).filter(Boolean));
+    const sums = new Map((s.SUMS ?? "").split("\n").map((l) => l.trim().split(/\s+/)).filter((p) => p.length === 2).map(([h, f]) => [f, h]));
     const loaded = new Set((s.LOADERS ?? "").split("\n").map((l) => /^LOAD\s+(\S+)/.exec(l.trim())?.[1]).filter(Boolean));
     const live = (f) => files.has(f) && (!loaderOf(f) || loaded.has(loaderOf(f).rel));
     const installed = records(s.INSTALLED);
@@ -310,10 +319,12 @@ function build(s) {
     for (const [name, it] of third) {
         const l = local.find((x) => x.name === name);
         items.push({
-            key: "3p:" + name, name, kind: "third", source: l ? l.source : "на планшете",
+            key: "3p:" + name, name: name.replace(/\.qmd$/, ""), file: name, kind: l?.own ? "own" : "third", source: l ? l.source : "на планшете",
             state: it.on && !it.off ? "включён" : it.off && !it.on ? "выключен" : it.on ? "частично" : "не стоит",
             version: "", fresh: null, compatible: true, needs: [], requiredBy: [],
             desc: RU[name] ?? "", files: [...it.files], local: l?.local ?? null,
+            // Обновлять есть что, только если файл на планшете не совпадает с нашим.
+            differs: !!l && [...it.files].some((f) => { const h = sums.get(f) ?? sums.get(D + f); return h && h !== md5(l.local); }),
         });
     }
 
@@ -343,10 +354,10 @@ function build(s) {
 
 function actionsFor(it) {
     if (it.kind === "catalog") return ["install"];
-    if (it.kind === "third") {
+    if (it.kind === "third" || it.kind === "own") {
         if (it.state === "не стоит") return it.local ? ["install"] : [];
         const a = it.state === "включён" ? ["disable"] : it.state === "выключен" ? ["enable"] : ["enable", "disable"];
-        if (it.local) a.push("upgrade");
+        if (it.local && it.differs) a.push("upgrade");
         return [...a, "remove"];
     }
     const a = [];
@@ -436,6 +447,8 @@ const XOVI_OFF = RESET + `umount -q /etc/systemd/system/xochitl.service.d; syste
 // видит: его подключает строка «LOAD ingatellent/x.qmd» в загрузчике
 // _ingatellent.qmd в корне. Загрузчик ведёт установщик пакета, и при
 // ручном включении и выключении строку надо дописывать и убирать самой.
+const md5 = (p) => createHash("md5").update(readFileSync(p)).digest("hex");
+
 function loaderOf(f) {
     const rel = f.startsWith(Q + "/") ? f.slice(Q.length + 1) : "";
     if (!rel.includes("/")) return null;
@@ -484,8 +497,8 @@ async function apply(session, opts) {
 
         // Сторонние файлы кладутся до перезапуска, scp отдельно от ssh.
         for (const p of plan) {
-            if (p.it.kind === "third" && (p.a === "install" || p.a === "upgrade") && p.it.local) {
-                const dest = p.a === "upgrade" && p.it.state === "выключен" ? D + p.it.files[0] : `${Q}/${p.it.name}`;
+            if ((p.it.kind === "third" || p.it.kind === "own") && (p.a === "install" || p.a === "upgrade") && p.it.local) {
+                const dest = p.a === "upgrade" && p.it.state === "выключен" ? D + p.it.files[0] : `${Q}/${p.it.file}`;
                 if (p.a === "upgrade" && p.it.state === "выключен") await ssh(`mkdir -p ${q(dirname(dest))}`);
                 await scp(p.it.local, dest);
                 mem.log.push(`${p.a === "install" ? "поставлен" : "обновлён"} ${p.it.name}`);
@@ -500,7 +513,7 @@ async function apply(session, opts) {
             if (a === "enable" || a === "install") return true;
             return it.state === "включён" || it.state === "частично";
         };
-        const start = [...mem.status.items.filter((i) => i.kind === "mod" || i.kind === "third"), ...plan.filter((p) => p.it.kind === "catalog").map((p) => p.it)]
+        const start = [...mem.status.items.filter((i) => i.kind === "mod" || i.kind === "third" || i.kind === "own"), ...plan.filter((p) => p.it.kind === "catalog").map((p) => p.it)]
             .some(willOn);
         let script = "V=" + VELLUM + "\n";
         if (trial && start) script += ARM;
@@ -512,7 +525,7 @@ async function apply(session, opts) {
             if (p.it.kind === "mod" && p.a === "remove") {
                 script += p.it.files.map((f) => `rm -f ${q(D + f)}`).join("\n") + "\n";
             }
-            if (p.it.kind === "third" && p.a === "remove") {
+            if ((p.it.kind === "third" || p.it.kind === "own") && p.a === "remove") {
                 script += p.it.files.map((f) => `rm -f ${q(f)} ${q(D + f)}`).join("\n") + `\necho "@@LOG удалён ${p.it.name}"\n`;
             }
         }
@@ -524,7 +537,7 @@ async function apply(session, opts) {
         await refresh(false);
         let moves = "";
         for (const it of mem.status.items) {
-            if (it.kind !== "mod" && it.kind !== "third") continue;
+            if (it.kind !== "mod" && it.kind !== "third" && it.kind !== "own") continue;
             const a = chosen[it.key];
             let want = null;
             if (a === "enable" || a === "install") want = true;
@@ -532,7 +545,7 @@ async function apply(session, opts) {
             else if (a === "upgrade" && it.kind === "mod") want = !wasOff.has(it.name);
             if (want !== null) moves += moveScript(it.files, want);
         }
-        const anyOn = () => mem.status.items.some((i) => (i.kind === "mod" || i.kind === "third") && i.state !== "выключен" && i.state !== "не стоит");
+        const anyOn = () => mem.status.items.some((i) => (i.kind === "mod" || i.kind === "third" || i.kind === "own") && i.state !== "выключен" && i.state !== "не стоит");
         moves += start ? XOVI_ON : XOVI_OFF;
         if (!trial && start) moves += DISARM("cancelled");
         const r2 = await ssh(moves, 60000);

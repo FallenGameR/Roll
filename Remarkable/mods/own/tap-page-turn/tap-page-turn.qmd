@@ -1,4 +1,4 @@
-; tapPageTurn.qmd - tap on the left/right edge of the screen turns the page.
+; tap-page-turn.qmd - tap on the left/right edge of the screen turns the page.
 ; Two ingatellent mods glued into one file, no loader, no dependency:
 ;   scrollScreenUpOrDown.qmd  - scroll and page-change functions (DocumentView)
 ;   tapToChangeViewOrPage.qmd - edge tap calls them (SceneViewGestures)
