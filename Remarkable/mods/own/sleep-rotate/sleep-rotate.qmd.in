@@ -1,0 +1,43 @@
+; sleep-rotate.qmd - full-screen sleep picture that changes from sleep to sleep.
+; Works with the custom sleep screen: xochitl.conf [General] SleepScreenPath
+; points at /home/root/sleepscreen/sleep-1.png. If the path ends with
+; "/sleep-<number>.png", the mod swaps the number for one of 1..gbaSleepCount,
+; chosen by the current second, every time the sleep window shows.
+; Pictures: /home/root/sleepscreen/sleep-1.png, sleep-2.png, ... Adding a
+; picture means one more file and a new gbaSleepCount below.
+; Source: sleep-rotate.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
+; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
+
+AFFECT [[/qt/qml/xofm/modules/sleepscreen/qml/default/sleep-window-opaque.qml]]
+    TRAVERSE [[BaseView]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            property ~&int&~ gbaSleepCount: 2
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function ~&onVisibleChanged&~() {
+                    ~&if&~ (~&root&~.~&visible&~) {
+                        ~&logo&~.~&source&~ = ~&root&~.~&makeSleepScreenPath&~();
+                    }
+                }
+            }
+        }
+
+        REPLACE [[makeSleepScreenPath]] WITH {
+            function ~&makeSleepScreenPath&~() {
+                ~&let&~ ~&path&~ = ~&root&~.~&isettings&~.~&sleepScreenPath&~;
+                ~&const&~ cut = ~&path&~.lastIndexOf("/sleep-");
+                ~&if&~ (cut >= 0 && ~&root&~.gbaSleepCount > 0) {
+                    ~&const&~ pick = 1 + ~&Math&~.~&floor&~(~&Date&~.now() / 1000) % ~&root&~.gbaSleepCount;
+                    ~&path&~ = ~&path&~.~&substring&~(0, cut) + "/sleep-" + pick + ".png";
+                    ~&console&~.~&log&~("sleep-rotate: " + ~&path&~);
+                }
+                ~&if&~ (!~&path&~.~&startsWith&~("file:")) {
+                    ~&path&~ = "file://" + ~&path&~;
+                }
+                ~&return&~ ~&path&~;
+            }
+        }
+    END TRAVERSE
+END AFFECT

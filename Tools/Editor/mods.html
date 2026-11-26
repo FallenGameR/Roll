@@ -204,7 +204,11 @@ function render(){
 
   if (s){
     const group = (kinds) => s.items.filter((i) => kinds.includes(i.kind)).sort((a, b) => a.name.localeCompare(b.name));
-    const mods = group(["mod"]), own = group(["own"]), third = group(["third"]), util = group(["utility", "system"]);
+    const mods = group(["mod"]), own = group(["own"]), util = group(["utility", "system"]);
+    // Сторонний мод, которого нет на планшете, - это только копия в Remarkable\mods:
+    // ему место в каталоге, а не в списке установленного.
+    const third = group(["third"]).filter((i) => i.state !== "не стоит" || i.choice);
+    const thirdIdle = group(["third"]).filter((i) => i.state === "не стоит" && !i.choice);
     if (own.length){
       h += `<h2>Свои</h2>`;
       h += own.map((i) => rowHtml(i, locked)).join("");
@@ -218,8 +222,8 @@ function render(){
     h += `<h2>Служебное</h2>`;
     h += util.map((i) => rowHtml(i, locked)).join("");
     const f = filter.trim().toLowerCase();
-    const cat = s.catalog.filter((i) => !f || i.name.includes(f) || i.desc.toLowerCase().includes(f));
-    h += `<details id="cat"${catOpen ? " open" : ""}><summary>Каталог Vellum: ${s.catalog.length} модов под эту прошивку</summary>
+    const cat = [...thirdIdle, ...s.catalog].filter((i) => !f || i.name.includes(f) || i.desc.toLowerCase().includes(f));
+    h += `<details id="cat"${catOpen ? " open" : ""}><summary>Каталог: ${s.catalog.length + thirdIdle.length} модов под эту прошивку</summary>
       <input class="filter" placeholder="поиск" value="${esc(filter)}">` + cat.map((i) => rowHtml(i, locked)).join("") + `</details>`;
   }
   h += `</main>`;

@@ -80,6 +80,31 @@ xovi-message-broker 19.0.0-r1), remarkable-os 3.27.3.0-r0, rmpp 1.0.0-r0.
 Точные старые версии Vellum уже может не отдавать, тогда встанут свежие;
 сами файлы `.qmd` этих версий лежат в `Remarkable\mods` модуля.
 
+## Картинки сна
+Экран сна прошивка рисует из `/usr/share/remarkable/carousel/sleep_Illustration_01..03.png`
+(системный раздел). Мастер подменил их своими через карусель RCU; обновление
+прошивки возвращает родные. Свои картинки лежат в трёх местах: исходники
+`OneDrive\Images\Wallpapers\2026\GitS ReMarkable`, копии RCU
+`%APPDATA%\davisr\rcu\carousel\*.png.<прошивка>` и готовый набор с нужными
+именами на планшете в `/home/root/carousel-gits` (01 - `03_cropped`,
+02 - `cyber_book`, 03 - `normal_book`). Родные лежат в
+`/home/root/.local/share/davisr/rcu/carousel.system_3.27.3.0`, на 3.29.1 они те
+же. Вернуть свои после обновления:
+
+```sh
+mount-rw; cp /home/root/carousel-gits/*.png /usr/share/remarkable/carousel/; sync; mount-restore
+```
+
+Перезапуск интерфейса не нужен. На `/` после этого свободно около 32 МБ.
+
+Полноэкранный режим, без рамки и надписи «paper tablet is sleeping»: строка
+`SleepScreenPath=<путь к png>` в секции `[General]` файла
+`/home/root/.config/remarkable/xochitl.conf` (remarkable.guide, «Change System
+Splash Screens»). Карусель тогда не показывается, картинка одна, лежит в
+`/home/root` и обновление прошивки её не трогает. Конфиг правят при
+остановленном `xochitl`, иначе он перепишет файл. Наша картинка:
+`/home/root/sleepscreen/sleep.png`, копия конфига до правки - рядом.
+
 ## Перед обновлением прошивки
 26 ноября Мастер включил автообновление, чтобы посмотреть, что нового, и
 планшет сразу начал качать 3.29.1 (до этого было 3.27.3). Новая
@@ -172,7 +197,8 @@ QML и 278 иконок в `ark\icons`. Это код reMarkable: класть �
 | Симптом | Файл | Зацепка |
 |---|---|---|
 | след после входа в настройки | `qml\device\view\settings\Settings.qml` | `function onOpened` |
-| первая отрисовка библиотеки после PIN | `qml\device\view\navigator\Navigator.qml` | библиотека снова получила фокус (`onActiveFocusChanged`). `UnlockWindow.qml` `onVisibleChanged` 26 ноября не сработал ни разу |
+| первая отрисовка библиотеки после PIN | `qml\device\view\main\MainView.qml` | `root.passcodeHandler.userLocked` стал `false`: сразу после PIN. Библиотека дорисовывается секунд через 8, её ловит `Navigator.qml` по первому `activeFocus` после пробуждения (`BatteryManager.onDisplayStateChanged`). `UnlockWindow.qml` `onVisibleChanged` не срабатывает |
+| след значка ожидания | `qml\device\ui\controls\Loading.qml` | `function hide`, если `visualRoot.visible`: точки успели нарисоваться. Ловить `isBusy`/`isLoading` в `DocumentView` нельзя - они меняются при каждом открытии, даже без значка |
 | след значка ожидания при открытии PDF | `qml\device\view\documentview\DocumentView.qml` | `Loading { id: loadingIndicator }`, видим при `isBusy`; ловить `onVisibleChanged` в `false` |
 | значки батареи, зарядки, синхронизации вверху справа не перерисовались в библиотеке | `qml\device\view\navigator\ContentHeader.qml` (`statusIndicators`), `Navigator.qml` | `Navigator` `onVisibleChanged` в `true` |
 | следы после ластика | `qml\device\view\documentview\DeviceSceneView.qml` | `onStrokeCompleted`, после `eraseWithLine` |

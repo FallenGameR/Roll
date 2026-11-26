@@ -4,8 +4,8 @@
 ; writes "gba: <event>" to the xochitl journal, to see which one fired.
 ; Events:
 ;   settings opened                    (Settings.qml, onOpened)
-;   document stopped loading, but only if the loading indicator was shown
-;                                      (DocumentView.qml: loadingIndicator, isBusy, isLoading)
+;   loading indicator went away after it was drawn (Loading.qml, hide)
+;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
 ;   library got input focus back for the first time after waking up or after
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
@@ -35,54 +35,63 @@ AFFECT [[/qml/device/view/settings/Settings.qml]]
     END TRAVERSE
 END AFFECT
 
-; Document stopped loading, only if the loading indicator was shown: a quick
-; open with no indicator leaves no ghost and gets no refresh.
-AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
+; Loading indicator (the dots in the middle of the screen) went away after it
+; was actually drawn. Patched in the indicator itself, so it covers every place
+; that shows one. The indicator draws only after a delay, so a quick open with
+; no dots on screen gets no refresh.
+AFFECT [[/qml/device/ui/controls/Loading.qml]]
     IMPORT [[com.remarkable]] 1.0
-    TRAVERSE [[FocusScope]]#[[root]]
+    TRAVERSE [[Item]]#[[root]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&bool&~ gbaIndicatorShown: ~&false&~
-            property ~&string&~ gbaLoadingReason: ""
+            property ~&bool&~ gbaDrawn: ~&false&~
 
             ~&Timer&~ {
-                ~&id&~: gbaLoadingTimer
+                ~&id&~: gbaSpinnerTimer
                 ~&interval&~: 1000
                 ~&repeat&~: ~&false&~
                 ~&onTriggered&~: {
-                    ~&if&~ (~&root&~.~&isBusy&~ || ~&root&~.~&isLoading&~) {
-                        ~&return&~;
-                    }
-                    ~&root&~.gbaIndicatorShown = ~&false&~;
-                    ~&console&~.~&log&~("gba: document loaded, " + ~&root&~.gbaLoadingReason);
+                    ~&console&~.~&log&~("gba: loading indicator gone");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+        }
+
+        ; visualRoot.visible can not tell: by the time hide() runs the whole
+        ; indicator is already invisible, and QML reports the child invisible too.
+        ; So show() sets a flag of our own.
+        REBUILD [[show]]
+            LOCATE AFTER STREAM \~&tickTimer&~.~&start&~();\ INSERT STREAM \ ~&root&~.gbaDrawn = ~&true&~;\
+        END REBUILD
+
+        REBUILD [[hide]]
+            LOCATE BEFORE STREAM \~&delayedShowTimer&~.~&stop&~();\ INSERT STREAM \ ~&if&~ (~&root&~.gbaDrawn) { ~&root&~.gbaDrawn = ~&false&~; gbaSpinnerTimer.~&restart&~(); }\
+        END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; PIN accepted: the unlock screen goes away. MainView lives all the time, so
+; the timer survives the unlock window closing.
+AFFECT [[/qml/device/view/main/MainView.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[Background]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaUnlockTimer
+                ~&interval&~: 300
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: unlocked");
                     ~&EPFramebuffer&~.clearGhosting();
                 }
             }
 
             ~&Connections&~ {
-                ~&target&~: ~&loadingIndicator&~
-                function ~&onVisibleChanged&~() {
-                    ~&if&~ (~&loadingIndicator&~.~&visible&~) {
-                        ~&root&~.gbaIndicatorShown = ~&true&~;
-                    } ~&else&~ {
-                        ~&root&~.gbaLoadingReason = "indicator hidden";
-                        gbaLoadingTimer.~&restart&~();
-                    }
-                }
-            }
-
-            ~&Connections&~ {
-                ~&target&~: ~&root&~
-                function onIsBusyChanged() {
-                    ~&if&~ (!~&root&~.~&isBusy&~ && ~&root&~.gbaIndicatorShown) {
-                        ~&root&~.gbaLoadingReason = "busy over";
-                        gbaLoadingTimer.~&restart&~();
-                    }
-                }
-                function onIsLoadingChanged() {
-                    ~&if&~ (!~&root&~.~&isLoading&~ && ~&root&~.gbaIndicatorShown) {
-                        ~&root&~.gbaLoadingReason = "loading over";
-                        gbaLoadingTimer.~&restart&~();
+                ~&target&~: ~&root&~.~&passcodeHandler&~
+                function onUserLockedChanged() {
+                    ~&if&~ (!~&root&~.~&passcodeHandler&~.~&userLocked&~) {
+                        gbaUnlockTimer.~&restart&~();
                     }
                 }
             }

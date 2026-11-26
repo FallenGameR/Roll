@@ -4,8 +4,8 @@
 ; writes "gba: <event>" to the xochitl journal, to see which one fired.
 ; Events:
 ;   settings opened                    (Settings.qml, onOpened)
-;   document stopped loading, but only if the loading indicator was shown
-;                                      (DocumentView.qml: loadingIndicator, isBusy, isLoading)
+;   loading indicator went away after it was drawn (Loading.qml, hide)
+;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
 ;   library got input focus back for the first time after waking up or after
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
@@ -35,54 +35,63 @@ AFFECT [[12599552112012170435]]
     END TRAVERSE
 END AFFECT
 
-; Document stopped loading, only if the loading indicator was shown: a quick
-; open with no indicator leaves no ghost and gets no refresh.
-AFFECT [[1224665461898798997]]
+; Loading indicator (the dots in the middle of the screen) went away after it
+; was actually drawn. Patched in the indicator itself, so it covers every place
+; that shows one. The indicator draws only after a delay, so a quick open with
+; no dots on screen gets no refresh.
+AFFECT [[9475861978899727926]]
     IMPORT [[197082280.8400022150001312063]] 1.0
-    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+    TRAVERSE [[6502786168]]#[[6504254477]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&6503679477&~ gbaIndicatorShown: ~&214625660372&~
-            property ~&7083178290016&~ gbaLoadingReason: ""
+            property ~&6503679477&~ gbaDrawn: ~&214625660372&~
 
             ~&214604601930&~ {
-                ~&5972374&~: gbaLoadingTimer
+                ~&5972374&~: gbaSpinnerTimer
                 ~&7713147298280334&~: 1000
                 ~&7083121289162&~: ~&214625660372&~
                 ~&495358363329399331&~: {
-                    ~&5972376&~ (~&6504254477&~.~&7082784038440&~ || ~&6504254477&~.~&254534022647302435&~) {
-                        ~&7083121450889&~;
-                    }
-                    ~&6504254477&~.gbaIndicatorShown = ~&214625660372&~;
-                    ~&233724020023100&~.~&197092075&~("gba: document loaded, " + ~&6504254477&~.gbaLoadingReason);
+                    ~&233724020023100&~.~&197092075&~("gba: loading indicator gone");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+        }
+
+        ; visualRoot.visible can not tell: by the time hide() runs the whole
+        ; indicator is already invisible, and QML reports the child invisible too.
+        ; So show() sets a flag of our own.
+        REBUILD [[6504282794]]
+            LOCATE AFTER STREAM \~&254549096489661813&~.~&214641748151&~();\ INSERT STREAM \ ~&6504254477&~.gbaDrawn = ~&6504329801&~;\
+        END REBUILD
+
+        REBUILD [[6503888195]]
+            LOCATE BEFORE STREAM \~&4493576835535729955&~.~&6504295855&~();\ INSERT STREAM \ ~&5972376&~ (~&6504254477&~.gbaDrawn) { ~&6504254477&~.gbaDrawn = ~&214625660372&~; gbaSpinnerTimer.~&233743006639214&~(); }\
+        END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; PIN accepted: the unlock screen goes away. MainView lives all the time, so
+; the timer survives the unlock window closing.
+AFFECT [[2328484894988065446]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397788359424131273]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaUnlockTimer
+                ~&7713147298280334&~: 300
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: unlocked");
                     ~&6687579895491175043&~.clearGhosting();
                 }
             }
 
             ~&428051690305612204&~ {
-                ~&7083194890448&~: ~&12173585954242770596&~
-                function ~&13733777459642361598&~() {
-                    ~&5972376&~ (~&12173585954242770596&~.~&233748328658231&~) {
-                        ~&6504254477&~.gbaIndicatorShown = ~&6504329801&~;
-                    } ~&6503784146&~ {
-                        ~&6504254477&~.gbaLoadingReason = "indicator hidden";
-                        gbaLoadingTimer.~&233743006639214&~();
-                    }
-                }
-            }
-
-            ~&428051690305612204&~ {
-                ~&7083194890448&~: ~&6504254477&~
-                function onIsBusyChanged() {
-                    ~&5972376&~ (!~&6504254477&~.~&7082784038440&~ && ~&6504254477&~.gbaIndicatorShown) {
-                        ~&6504254477&~.gbaLoadingReason = "busy over";
-                        gbaLoadingTimer.~&233743006639214&~();
-                    }
-                }
-                function onIsLoadingChanged() {
-                    ~&5972376&~ (!~&6504254477&~.~&254534022647302435&~ && ~&6504254477&~.gbaIndicatorShown) {
-                        ~&6504254477&~.gbaLoadingReason = "loading over";
-                        gbaLoadingTimer.~&233743006639214&~();
+                ~&7083194890448&~: ~&6504254477&~.~&9729068523592542297&~
+                function onUserLockedChanged() {
+                    ~&5972376&~ (!~&6504254477&~.~&9729068523592542297&~.~&8400180753700265146&~) {
+                        gbaUnlockTimer.~&233743006639214&~();
                     }
                 }
             }
