@@ -130,11 +130,71 @@ GPL/MIT, авторы и лицензии - в шапке каждого фай�
 чужого `.qmd` затрёт следующий `vellum upgrade`. Канвас показывает такую
 папку в группе «Сторонние» и ставит её `.qmd` копией.
 
+## Исходники интерфейса и события
+Интерфейс написан на QML, исходники вшиты в `/usr/bin/xochitl` ресурсами
+Qt (сжаты zstd). Вытащить всё - QML, иконки, картинки:
+
+```powershell
+scp -O root@<адрес>:/usr/bin/xochitl <папка>\xochitl
+python Tools\Remarkable\extract-qrc.py <папка>\xochitl <папка>\qrc-<прошивка>
+```
+
+Нужен `pip install zstandard`. На 3.29.1 выходит 1036 файлов, из них 606
+QML и 278 иконок в `ark\icons`. Это код reMarkable: класть в папку сессии,
+не в репозиторий. Устройство формата - в шапке скрипта.
+
+Событие для мода - любой сигнал или функция в этих QML: `on<Свойство>Changed`
+у видимости, загрузки, текущей страницы, `onOpened`, `onClosed`,
+`onStrokeCompleted`. Мод вклеивается в файл через qmldiff (`AFFECT <путь>`,
+`TRAVERSE`, `INSERT`/`REBUILD`/`REPLACE`), обычно так: таймер на 250-400 мс
+и `Connections` или `REBUILD` обработчика, который перезапускает таймер;
+по таймеру - `EPFramebuffer.clearGhosting()` (нужен `IMPORT com.remarkable`).
+Таймер нужен, чтобы перерисовать после того, как экран дорисовался.
+Имена в моде пишутся хешами из `hashtab`: хеш имени ищется по значению в
+таблице (`decode-qmd.py` делает обратное). Своих новых имён (id таймеров,
+свойства) в таблице нет, их пишут открытым текстом.
+
+Прошивка сама сообщает своему объекту `GhostBuster` о части событий
+(`ghostBuster.viewChange(GhostBuster.<событие>)`): `SettingsOpened`
+(`qml\device\view\settings\Settings.qml`, `onOpened`), `SettingsClosed`
+(`xofm\modules\settings\qml\SettingsWindow.qml`), `DocumentViewDialogOpened`
+и `...Closed` (`DocumentView.qml`), `ShareByEmail...`, `SplashScreenClosed`,
+`Setup...`. Способы перерисовки: `ghostBuster.forceClearNow(причина)`,
+`userRequestedClear`, `retailRefresh`, `EPFramebuffer.clearGhosting()`,
+`EPFramebuffer.scheduleGhostRemoval()`.
+
+Где что искать под жалобы Мастера (26 ноября):
+
+| Симптом | Файл | Зацепка |
+|---|---|---|
+| след после входа в настройки | `qml\device\view\settings\Settings.qml` | `function onOpened` |
+| след значка ожидания при открытии PDF | `qml\device\view\documentview\DocumentView.qml` | `Loading { id: loadingIndicator }`, видим при `isBusy`; ловить `onVisibleChanged` в `false` |
+| значки батареи, зарядки, синхронизации вверху справа не перерисовались в библиотеке | `qml\device\view\navigator\ContentHeader.qml` (`statusIndicators`), `Navigator.qml` | `Navigator` `onVisibleChanged` в `true` |
+| следы после ластика | `qml\device\view\documentview\DeviceSceneView.qml` | `onStrokeCompleted`, после `eraseWithLine` |
+| смена папки, раздела | `Navigator.qml` | `explorer.onCurrentFolderIdChanged`, `_sidebar.onActiveViewChanged` |
+| закрытие диалога в документе | `DocumentView.qml` | `handleDialogGhosting(false)` |
+
 ## Свои моды
 Пишем свои, когда чужой мод неудобен или Vellum отстаёт с новой
 прошивкой на месяцы. Лежат в `Remarkable\mods\own\<имя>\<имя>.qmd` рядом
 со своим `LICENSE`; имя через дефис, как у пакетов Vellum. Канвас
 показывает их первой группой «Свои».
+
+### Жест пятью пальцами
+`ghostbuster` из Vellum вешает фильтр в зону жестов документа
+(`SceneViewGestures`) и работает только в открытом документе.
+`ghostbuster-global` из Reloaded вешает его в общее окно жестов и работает
+в библиотеке и настройках, а в документе нет: касания там перехватывает
+зона документа, до общего окна они не доходят. Перерисовывают они
+по-разному: `ghostbuster` через `ghostBuster.forceClearNow`,
+`ghostbuster-global` через `EPFramebuffer.clearGhosting()`; второй, на
+глаз Мастера, чище.
+
+### ghostbuster-everywhere
+`Remarkable\mods\own\ghostbuster-everywhere\ghostbuster-everywhere.qmd` -
+наш мод: оба фильтра в одном файле (зона документа и общее окно), оба
+перерисовывают через `clearGhosting()`. Ставится вместо пары
+`ghostbuster` + `ghostbuster-global`, вместе с ними не ставить.
 
 ### tap-page-turn
 `Remarkable\mods\own\tap-page-turn\tap-page-turn.qmd` - когда панель

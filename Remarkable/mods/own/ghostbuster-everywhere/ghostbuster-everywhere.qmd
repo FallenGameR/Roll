@@ -1,0 +1,43 @@
+; ghostbuster-everywhere.qmd - 5-finger tap does a full screen refresh everywhere.
+; Both refreshes use EPFramebuffer.clearGhosting() (the GhostBuster Reloaded way),
+; which looked cleaner on the device than ghostBuster.forceClearNow.
+; Two filters, because the open document has its own gesture area that takes
+; touches before the global gesture window sees them:
+;   document - inside SceneViewGestures, placed like ghostbuster (Mitchell Scott, Vellum);
+;   global   - in GesturesWindow: library, settings, menus, like ghostbuster-global
+;              (pfjarschel, GhostBuster Reloaded).
+; SPDX-License-Identifier: GPL-3.0-only. Built for firmware 3.29.1.
+
+AFFECT [[17298303916558156758]]
+TRAVERSE [[254504370080162629]]
+    LOCATE AFTER [[8520322697674622449]]#[[15919479264072650887]]
+    INSERT {
+        ~&8520322697674622449&~ {
+            ~&5972374&~: ghostbusterEverywhereFilter
+            ~&8399878573055752961&~: "ghost-buster-everywhere"
+            ~&233726547792244&~: !~&11206357713879652003&~.~&496507644976596653&~
+            ~&233727659172727&~: 5
+            ~&233739427250348&~: {
+                ~&6687579895491175043&~.clearGhosting();
+            }
+        }
+    }
+END TRAVERSE
+END AFFECT
+
+AFFECT [[17477757197668945522]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[7711468349764991]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&8520322697674622449&~ {
+                ~&8399878573055752961&~: "global-5finger-ghostbuster"
+                ~&254549375155946341&~: ~&6504254477&~.~&254549375155946341&~
+                ~&233727659172727&~: 5
+                ~&233739427250348&~: {
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
