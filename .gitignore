@@ -1,3 +1,5 @@
 tracks-fzf-cache.tsv
 __pycache__/
 *.pyc
+# decoded reMarkable firmware code, not ours to publish
+Remarkable/mods/decoded/
