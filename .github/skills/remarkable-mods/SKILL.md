@@ -186,7 +186,11 @@ QML и 278 иконок в `ark\icons`. Это код reMarkable: класть �
 Готовый `.qmd` собирает `python Tools\Remarkable\encode-qmd.py <hashtab>
 <имя>.qmd.in <имя>.qmd`; имени, которого нет в таблице, он не пропустит.
 Правят только `.qmd.in`. `console.log("...")` в обработчике пишет в журнал
-`journalctl -u xochitl`: так видно, какое событие сработало.
+`journalctl -u xochitl`: так видно, какое событие сработало. Комментарий `;`
+допустим только вне фигурных скобок `INSERT { }` / `REPLACE ... WITH { }`:
+внутри это уже код QML, и qmldiff падает с «expected item assignment value
+token». Проверять журнал после каждой установки: ошибка разбора не роняет
+интерфейс, мод просто молча не встаёт.
 
 Прошивка сама сообщает своему объекту `GhostBuster` о части событий
 (`ghostBuster.viewChange(GhostBuster.<событие>)`): `SettingsOpened`

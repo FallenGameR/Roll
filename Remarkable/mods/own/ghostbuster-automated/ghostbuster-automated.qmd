@@ -10,6 +10,8 @@
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
 ;   page turn that took long to draw   (DocumentView.qml: currentPage, isLoading);
+;   toolbar panel closed               (ToolbarFoldout.qml, visible)
+;   toolbar hidden or collapsed        (DocumentView.qml: toolbar.shown, expanded)
 ;                                       heavy pages (graphics-rich PDFs) leave
 ;                                       ghosting, quick ones are left alone
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -27,8 +29,6 @@ AFFECT [[1224665461898798997]]
             property ~&197088788&~ gbaSlowTurnMs: 400
             property ~&7082585429636&~ gbaTurnAt: 0
 
-            ; The loading indicator of the document leaves the refresh to us: a
-            ; slow open or turn with dots on screen is refreshed once, here.
             ~&233681166222244&~ {
                 ~&7083194890448&~: ~&12173585954242770596&~
                 property: "gbaSelfRefresh"
@@ -89,6 +89,8 @@ AFFECT [[12599552112012170435]]
     END TRAVERSE
 END AFFECT
 
+; gbaSelfRefresh: the document view turns it off for its own indicator and
+; refreshes once together with the page turn.
 ; Loading indicator (the dots in the middle of the screen) went away after it
 ; was actually drawn. Patched in the indicator itself, so it covers every place
 ; that shows one. The indicator draws only after a delay, so a quick open with
@@ -99,8 +101,6 @@ AFFECT [[9475861978899727926]]
         LOCATE AFTER ALL
         INSERT {
             property ~&6503679477&~ gbaDrawn: ~&214625660372&~
-            ; The document view handles its own indicator together with the page
-            ; turn, in one refresh; it sets this to false.
             property ~&6503679477&~ gbaSelfRefresh: ~&6504329801&~
 
             ~&214604601930&~ {
@@ -124,6 +124,69 @@ AFFECT [[9475861978899727926]]
         REBUILD [[6503888195]]
             LOCATE BEFORE STREAM \~&4493576835535729955&~.~&6504295855&~();\ INSERT STREAM \ ~&5972376&~ (~&6504254477&~.gbaDrawn) { ~&6504254477&~.gbaDrawn = ~&214625660372&~; ~&5972376&~ (~&6504254477&~.gbaSelfRefresh) gbaSpinnerTimer.~&233743006639214&~(); }\
         END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; Toolbar panel (pens, colours, tags, layers...) closed. Patched in the panel
+; itself, so every toolbar panel is covered. Nested panels closing together
+; restart the same timer and give one refresh.
+AFFECT [[15392681159132014986]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[233682693087402]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaFoldoutTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: toolbar panel closed");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function ~&13733777459642361598&~() {
+                    ~&5972376&~ (!~&6504254477&~.~&233748328658231&~) {
+                        gbaFoldoutTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Document: the toolbar itself was hidden or collapsed.
+AFFECT [[1224665461898798997]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaToolbarTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: toolbar hidden");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&233745975898428&~
+                function onShownChanged() {
+                    ~&5972376&~ (!~&233745975898428&~.~&214641332312&~) {
+                        gbaToolbarTimer.~&233743006639214&~();
+                    }
+                }
+                function ~&2815617667007525497&~() {
+                    ~&5972376&~ (!~&233745975898428&~.~&7712989577739634&~) {
+                        gbaToolbarTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
     END TRAVERSE
 END AFFECT
 

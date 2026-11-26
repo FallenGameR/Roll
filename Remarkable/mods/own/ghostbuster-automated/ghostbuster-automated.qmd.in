@@ -10,6 +10,8 @@
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
 ;   page turn that took long to draw   (DocumentView.qml: currentPage, isLoading);
+;   toolbar panel closed               (ToolbarFoldout.qml, visible)
+;   toolbar hidden or collapsed        (DocumentView.qml: toolbar.shown, expanded)
 ;                                       heavy pages (graphics-rich PDFs) leave
 ;                                       ghosting, quick ones are left alone
 ; Source: ghostbuster-automated.qmd.in, encoded by Tools\Remarkable\encode-qmd.py.
@@ -27,8 +29,6 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
             property ~&int&~ gbaSlowTurnMs: 400
             property ~&double&~ gbaTurnAt: 0
 
-            ; The loading indicator of the document leaves the refresh to us: a
-            ; slow open or turn with dots on screen is refreshed once, here.
             ~&Binding&~ {
                 ~&target&~: ~&loadingIndicator&~
                 property: "gbaSelfRefresh"
@@ -89,6 +89,8 @@ AFFECT [[/qml/device/view/settings/Settings.qml]]
     END TRAVERSE
 END AFFECT
 
+; gbaSelfRefresh: the document view turns it off for its own indicator and
+; refreshes once together with the page turn.
 ; Loading indicator (the dots in the middle of the screen) went away after it
 ; was actually drawn. Patched in the indicator itself, so it covers every place
 ; that shows one. The indicator draws only after a delay, so a quick open with
@@ -99,8 +101,6 @@ AFFECT [[/qml/device/ui/controls/Loading.qml]]
         LOCATE AFTER ALL
         INSERT {
             property ~&bool&~ gbaDrawn: ~&false&~
-            ; The document view handles its own indicator together with the page
-            ; turn, in one refresh; it sets this to false.
             property ~&bool&~ gbaSelfRefresh: ~&true&~
 
             ~&Timer&~ {
@@ -124,6 +124,69 @@ AFFECT [[/qml/device/ui/controls/Loading.qml]]
         REBUILD [[hide]]
             LOCATE BEFORE STREAM \~&delayedShowTimer&~.~&stop&~();\ INSERT STREAM \ ~&if&~ (~&root&~.gbaDrawn) { ~&root&~.gbaDrawn = ~&false&~; ~&if&~ (~&root&~.gbaSelfRefresh) gbaSpinnerTimer.~&restart&~(); }\
         END REBUILD
+    END TRAVERSE
+END AFFECT
+
+; Toolbar panel (pens, colours, tags, layers...) closed. Patched in the panel
+; itself, so every toolbar panel is covered. Nested panels closing together
+; restart the same timer and give one refresh.
+AFFECT [[/qt/qml/xofm/libs/toolbar/qml/ToolbarFoldout.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[Control]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaFoldoutTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: toolbar panel closed");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function ~&onVisibleChanged&~() {
+                    ~&if&~ (!~&root&~.~&visible&~) {
+                        gbaFoldoutTimer.~&restart&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Document: the toolbar itself was hidden or collapsed.
+AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[FocusScope]]#[[root]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaToolbarTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: toolbar hidden");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&toolbar&~
+                function onShownChanged() {
+                    ~&if&~ (!~&toolbar&~.~&shown&~) {
+                        gbaToolbarTimer.~&restart&~();
+                    }
+                }
+                function ~&onExpandedChanged&~() {
+                    ~&if&~ (!~&toolbar&~.~&expanded&~) {
+                        gbaToolbarTimer.~&restart&~();
+                    }
+                }
+            }
+        }
     END TRAVERSE
 END AFFECT
 
