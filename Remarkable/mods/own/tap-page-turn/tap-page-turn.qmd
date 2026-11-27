@@ -4,6 +4,9 @@
 ;   tapToChangeViewOrPage.qmd - edge tap calls them (SceneViewGestures)
 ; Source: https://github.com/ingatellent/xovi-qmd-extensions, commit 17720f5, folder 3.29
 ; Original author: ingatellent. SPDX-License-Identifier: GPL-2.0
+; Toolbar button: when the toolbar is shown, taps turn pages only while
+; the button is on. Button, menu entries and the tool-count fix are taken
+; from touchLock.qmd by Mitchell Scott (GPL-3.0-only), icons in assets.
 ; Built for firmware 3.29.1. For a new firmware take fresh files from the
 ; same repo and glue them again in the same order.
 AFFECT [[11806562588218124596]]
@@ -71,7 +74,7 @@ TRAVERSE ?#[[8400129380148390002]]
     REBUILD [[233739427250348]] 
         LOCATE BEFORE {~&233745975898428&~}
             INSERT {
-                ~&5972376&~ (~&197096443&~.~&180994&~ > ~&254549375155946341&~.~&7082729686082&~*0.35 && !~&233745975898428&~.~&7712989577739634&~ && !(~&9373035092751713082&~(~&6504329801&~))) {
+                ~&5972376&~ (~&197096443&~.~&180994&~ > ~&254549375155946341&~.~&7082729686082&~*0.35 && (!~&233745975898428&~.~&7712989577739634&~ || ~&233745975898428&~.rollTapTurn) && !(~&9373035092751713082&~(~&6504329801&~))) {
                     ~&5972376&~ (~&197096443&~.~&180993&~ < ~&254549375155946341&~.~&214646099849&~*0.25) {
                         ~&6504391364&~.scrollUpOrChangePage();
                         ~&7083121450889&~;
@@ -84,4 +87,89 @@ TRAVERSE ?#[[8400129380148390002]]
             }
     END REBUILD
 END TRAVERSE
+END AFFECT
+
+; Toolbar: rollTapTurn property, button, menu entries
+AFFECT [[11313888899523275277]]
+    TRAVERSE [[8397993708429497603]]#[[6504254477]]
+        LOCATE BEFORE ALL
+        INSERT {
+            property ~&6503679477&~ rollTapTurn: ~&214625660372&~
+            readonly property ~&197088788&~ rollTapTurnUnadjustedToolsCount: ~&6502909715&~.~&214626058827&~(~&6502909715&~.~&197092719&~(~&8399617152080145029&~, ~&486204912409902782&~) / ~&254477762679831355&~.~&214603824602&~.~&7713684474795983&~.~&7169487197506612278&~.~&214632782036&~) - 1
+        }
+
+        ; Every stock updateToolbarTools caller reads this, so extension buttons must be subtracted here.
+        ; Shared verbatim with betterToc.qmd: whichever loads second replaces it with identical text.
+        REPLACE [[4367731859579753176]] WITH {
+            readonly property ~&197088788&~ ~&4367731859579753176&~: {
+                ~&197102514&~ extensionButtonsShown = 0;
+                ~&197085552&~ (~&197102514&~ ~&180978&~ = 0; ~&180978&~ < ~&8400129135001204805&~.~&7712883416119442&~.~&7082886407723&~; ~&180978&~++) {
+                    ~&197102514&~ ~&214622350669&~ = ~&8400129135001204805&~.~&7712883416119442&~[~&180978&~];
+                    ~&5972376&~ (~&214622350669&~._isExtensionButton && ~&214622350669&~.~&8400072891534203801&~) extensionButtonsShown++;
+                }
+                ~&7083121450889&~ ~&6502909715&~.~&214626058827&~(~&6502909715&~.~&197092719&~(~&8399617152080145029&~, ~&486204912409902782&~) / ~&254477762679831355&~.~&214603824602&~.~&7713684474795983&~.~&7169487197506612278&~.~&214632782036&~) - 1 - extensionButtonsShown;
+            }
+        }
+
+        TRAVERSE [[6502786168]]#[[233745975898428]] > [[8398044571386570029]]
+            LOCATE BEFORE [[7712155293725601]][.[[8399878573055752961]]=[["3575461827597527778]]]
+            INSERT {
+                ~&454089850271038938&~ {
+                    ~&5972374&~: rollTapTurnButton
+                    ~&233745975898428&~: ~&6504254477&~
+                    ~&6504337259&~: ~&454089850271038938&~.~&6503187275&~.~&14888501028015932088&~
+
+                    property ~&6503679477&~ _isExtensionButton: ~&6504329801&~
+                    ~&8399601734642709923&~: ~&6504254477&~.rollTapTurn ? "/home/root/xovi/exthome/own-assets/tap-page-turn/on.svg" : "/home/root/xovi/exthome/own-assets/tap-page-turn/off.svg"
+                    ~&233726547792244&~: ~&6504329801&~
+                    ~&233748328658231&~: !!~&7712934851008712&~ && ~&6504254477&~.~&7712989577739634&~ && ~&6504254477&~.rollTapTurnUnadjustedToolsCount > 7
+                    ~&8400072891534203801&~: !!~&7712934851008712&~ && ~&6504254477&~.rollTapTurnUnadjustedToolsCount > 7
+
+                    ~&254542253295368380&~: {
+                        ~&6504254477&~.rollTapTurn = !~&6504254477&~.rollTapTurn;
+                    }
+                }
+            }
+        END TRAVERSE
+    END TRAVERSE
+END AFFECT
+
+; Settings menu entry when toolbar is cramped and More Tools is hidden
+AFFECT [[11704595946725378272]]
+    TRAVERSE [[454089850271038938]]#[[6504254477]] > [[254480451320573660]]#[[16710723433319324941]] > [[14125623155555875541]]#[[233724020048228]]
+        LOCATE AFTER [[425121728314878811.15740235808997988493]]
+        INSERT {
+            ~&425121728314878811&~.~&432643201877711221&~ {
+                ~&214632764553&~: ~&6504254477&~.~&233745975898428&~.rollTapTurn ? ~&6504222003&~("Tap Turn: On") : ~&6504222003&~("Tap Turn: Off")
+                ~&8399601734642709923&~: ~&6504254477&~.~&233745975898428&~.rollTapTurn ? "/home/root/xovi/exthome/own-assets/tap-page-turn/on.svg" : "/home/root/xovi/exthome/own-assets/tap-page-turn/off.svg"
+                ~&233748328658231&~: ~&6504254477&~.~&233745975898428&~.rollTapTurnUnadjustedToolsCount <= 7 &&
+                         !~&6504254477&~.~&233745975898428&~.~&16274393601388270883&~
+                ~&254542236275632405&~: {
+                    ~&6504254477&~.~&233745975898428&~.rollTapTurn = !~&6504254477&~.~&233745975898428&~.rollTapTurn;
+                    ~&6504254477&~.~&233745975898428&~.~&15738511857451076348&~();
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; More Tools menu entry when toolbar is cramped and More Tools is shown
+AFFECT [[6025599999262907645]]
+    TRAVERSE [[454089850271038938]]#[[6504254477]]
+        TRAVERSE [[14125623155555875541]]
+            LOCATE AFTER ALL
+            INSERT {
+                ~&425121728314878811&~.~&432643201877711221&~ {
+                    ~&214632764553&~: ~&6504254477&~.~&233745975898428&~.rollTapTurn ? ~&6504222003&~("Tap Turn: On") : ~&6504222003&~("Tap Turn: Off")
+                    ~&8399601734642709923&~: ~&6504254477&~.~&233745975898428&~.rollTapTurn ? "/home/root/xovi/exthome/own-assets/tap-page-turn/on.svg" : "/home/root/xovi/exthome/own-assets/tap-page-turn/off.svg"
+                    ~&233748328658231&~: ~&6504254477&~.~&233745975898428&~.rollTapTurnUnadjustedToolsCount <= 7 &&
+                             ~&6504254477&~.~&233745975898428&~.~&16274393601388270883&~
+                    ~&254542236275632405&~: {
+                        ~&6504254477&~.~&233745975898428&~.rollTapTurn = !~&6504254477&~.~&233745975898428&~.rollTapTurn;
+                        ~&6504254477&~.~&233745975898428&~.~&15738511857451076348&~();
+                    }
+                }
+            }
+        END TRAVERSE
+    END TRAVERSE
 END AFFECT

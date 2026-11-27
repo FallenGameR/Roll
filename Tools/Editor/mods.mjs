@@ -22,6 +22,7 @@ const X = "/home/root/xovi";
 const Q = `${X}/exthome/qt-resource-rebuilder`;
 const E = `${X}/extensions.d`;
 const D = `${X}/disabled-mods`;
+const ASSETS = `${X}/exthome/own-assets`;
 const VELLUM = "/home/root/.vellum/bin/vellum";
 const TRIAL_SECONDS = 900;
 
@@ -54,7 +55,8 @@ const RU = {
     "ghostbuster-everywhere.qmd": "Тап пятью пальцами перерисовывает экран где угодно: в документе, в библиотеке, в настройках.",
     "ghostbuster-automated.qmd": "Сам перерисовывает экран там, где остаются следы: после ввода PIN и первой отрисовки библиотеки, при входе в настройки, после значка ожидания. В PDF ещё после медленного перелистывания, закрытия панельки на панели инструментов и скрытия самой панели; в заметках и EPUB этого не делает.",
     "sleep-rotate.qmd": "Своя картинка сна на весь экран, без рамки, и они сменяются от сна к сну: sleep-1.png, sleep-2.png... из /home/root/sleepscreen. Номер берёт у встроенной карусели прошивки.",
-    "tap-page-turn.qmd": "Когда панель скрыта, тап по левой или правой четверти экрана ниже верхней трети листает назад или вперёд; длинную страницу сначала прокручивает. Один файл вместо пары модов Vellum.",
+    "tap-page-turn.qmd": "Тап по левой или правой четверти экрана ниже верхней трети листает назад или вперёд; длинную страницу сначала прокручивает. Когда панель скрыта, работает всегда; когда показана, только если включена кнопка-книга на панели (или пункт Tap Turn в меню, если панели тесно). Один файл вместо пары модов Vellum.",
+    "touch-lock.qmd": "Кнопка на панели: заблокировать касания, перо работает. Копия touch-lock из Vellum со своими иконками: тонкий открытый замок с откинутой дужкой и жирный закрытый. Иконки ставятся в xovi/exthome/own-assets/touch-lock.",
 };
 
 const ACTION_NAMES = {
@@ -110,9 +112,9 @@ async function ssh(script, timeoutMs = 180000) {
     return r;
 }
 
-async function scp(local, remote) {
+async function scp(local, remote, recursive = false) {
     const p = await preset();
-    const r = await run("scp", ["-O", "-q", ...SSH_OPTS, local, `${p.username}@${p.host}:${remote}`], null, 60000);
+    const r = await run("scp", ["-O", "-q", ...(recursive ? ["-r"] : []), ...SSH_OPTS, local, `${p.username}@${p.host}:${remote}`], null, 60000);
     if (r.code !== 0) throw fail("scp", `scp не прошёл: ${r.err.trim()}`);
 }
 
@@ -190,15 +192,17 @@ function sections(text) {
 
 // Сторонний мод - подпапка Remarkable\mods со своим LICENSE, как у
 // ghostbuster-reloaded; свой - такая же подпапка в Remarkable\mods\own.
-// Остальное там - копии модов Vellum и расшифровки.
+// Остальное там - копии модов Vellum и расшифровки. Папка assets рядом с
+// .qmd (иконки и прочее) ставится в ASSETS/<папка мода>.
 function localThirdParty() {
     const out = [];
     const scan = (root, own) => {
         if (!existsSync(root)) return;
         for (const dir of readdirSync(root, { withFileTypes: true })) {
             if (!dir.isDirectory() || !existsSync(join(root, dir.name, "LICENSE"))) continue;
+            const assets = join(root, dir.name, "assets");
             for (const f of readdirSync(join(root, dir.name))) {
-                if (f.endsWith(".qmd")) out.push({ name: f, source: dir.name, own, local: join(root, dir.name, f) });
+                if (f.endsWith(".qmd")) out.push({ name: f, source: dir.name, own, local: join(root, dir.name, f), assets: existsSync(assets) ? assets : null });
             }
         }
     };
@@ -325,7 +329,7 @@ function build(s) {
             key: "3p:" + name, name: name.replace(/\.qmd$/, ""), file: name, kind: l?.own ? "own" : "third", source: l ? l.source : "на планшете",
             state: it.on && !it.off ? "включён" : it.off && !it.on ? "выключен" : it.on ? "частично" : "не стоит",
             version: "", fresh: null, compatible: true, needs: [], requiredBy: [],
-            desc: RU[name] ?? "", files: [...it.files], local: l?.local ?? null,
+            desc: RU[name] ?? "", files: [...it.files], local: l?.local ?? null, assets: l?.assets ?? null, assetsDir: l ? `${ASSETS}/${l.source}` : null,
             // Обновлять есть что, только если файл на планшете не совпадает с нашим.
             differs: !!l && [...it.files].some((f) => { const h = sums.get(f) ?? sums.get(D + f); return h && h !== md5(l.local); }),
         });
@@ -504,6 +508,10 @@ async function apply(session, opts) {
                 const dest = p.a === "upgrade" && p.it.state === "выключен" ? D + p.it.files[0] : `${Q}/${p.it.file}`;
                 if (p.a === "upgrade" && p.it.state === "выключен") await ssh(`mkdir -p ${q(dirname(dest))}`);
                 await scp(p.it.local, dest);
+                if (p.it.assets) {
+                    await ssh(`rm -rf ${q(p.it.assetsDir)}; mkdir -p ${q(ASSETS)}`);
+                    await scp(p.it.assets, p.it.assetsDir, true);
+                }
                 mem.log.push(`${p.a === "install" ? "поставлен" : "обновлён"} ${p.it.name}`);
             }
         }
@@ -529,7 +537,8 @@ async function apply(session, opts) {
                 script += p.it.files.map((f) => `rm -f ${q(D + f)}`).join("\n") + "\n";
             }
             if ((p.it.kind === "third" || p.it.kind === "own") && p.a === "remove") {
-                script += p.it.files.map((f) => `rm -f ${q(f)} ${q(D + f)}`).join("\n") + `\necho "@@LOG удалён ${p.it.name}"\n`;
+                script += p.it.files.map((f) => `rm -f ${q(f)} ${q(D + f)}`).join("\n") +
+                    (p.it.assetsDir ? `\nrm -rf ${q(p.it.assetsDir)}` : "") + `\necho "@@LOG удалён ${p.it.name}"\n`;
             }
         }
         const r1 = await ssh(script, 300000);
