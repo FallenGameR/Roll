@@ -7,6 +7,7 @@
 ;   loading indicator went away after it was drawn (Loading.qml, hide)
 ;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
 ;   search: Filters or sort dropdown opened or closed (ExplorerSearch.qml, isOpen)
+;   left search for another library view (Navigator.qml, ViewManager.activeView)
 ;   document closed, back to the library (MainView.qml, documentViewActive
 ;   goes false; folder navigation inside the library does not touch it)
 ;   library got input focus back for the first time after waking up or after
@@ -310,6 +311,30 @@ AFFECT [[/qml/device/view/navigator/Navigator.qml]]
                 }
             }
 
+            ~&Timer&~ {
+                ~&id&~: gbaLeaveSearchTimer
+                ~&interval&~: 500
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&if&~ (~&root&~.~&visible&~) {
+                        ~&console&~.~&log&~("gba: left search");
+                        ~&EPFramebuffer&~.clearGhosting();
+                    }
+                }
+            }
+
+            property ~&bool&~ gbaWasSearch: ~&false&~
+
+            ~&Connections&~ {
+                ~&target&~: ~&ViewManager&~
+                function ~&onActiveViewChanged&~() {
+                    ~&const&~ isSearch = ~&ViewManager&~.~&activeView&~ === ~&ViewManager&~.~&View&~.~&Search&~;
+                    ~&if&~ (~&root&~.gbaWasSearch && !isSearch) {
+                        gbaLeaveSearchTimer.~&restart&~();
+                    }
+                    ~&root&~.gbaWasSearch = isSearch;
+                }
+            }
             ~&Connections&~ {
                 ~&target&~: ~&root&~
                 function ~&onActiveFocusChanged&~() {

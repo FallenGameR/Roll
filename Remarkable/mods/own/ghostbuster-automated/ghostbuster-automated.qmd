@@ -7,6 +7,7 @@
 ;   loading indicator went away after it was drawn (Loading.qml, hide)
 ;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
 ;   search: Filters or sort dropdown opened or closed (ExplorerSearch.qml, isOpen)
+;   left search for another library view (Navigator.qml, ViewManager.activeView)
 ;   document closed, back to the library (MainView.qml, documentViewActive
 ;   goes false; folder navigation inside the library does not touch it)
 ;   library got input focus back for the first time after waking up or after
@@ -310,6 +311,30 @@ AFFECT [[8850026134298937527]]
                 }
             }
 
+            ~&214604601930&~ {
+                ~&5972374&~: gbaLeaveSearchTimer
+                ~&7713147298280334&~: 500
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&5972376&~ (~&6504254477&~.~&233748328658231&~) {
+                        ~&233724020023100&~.~&197092075&~("gba: left search");
+                        ~&6687579895491175043&~.clearGhosting();
+                    }
+                }
+            }
+
+            property ~&6503679477&~ gbaWasSearch: ~&214625660372&~
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&456860916926733567&~
+                function ~&4910590129138652423&~() {
+                    ~&214622607920&~ isSearch = ~&456860916926733567&~.~&8399230650759125120&~ === ~&456860916926733567&~.~&6503241380&~.~&7081907567135&~;
+                    ~&5972376&~ (~&6504254477&~.gbaWasSearch && !isSearch) {
+                        gbaLeaveSearchTimer.~&233743006639214&~();
+                    }
+                    ~&6504254477&~.gbaWasSearch = isSearch;
+                }
+            }
             ~&428051690305612204&~ {
                 ~&7083194890448&~: ~&6504254477&~
                 function ~&13675943803964766956&~() {
