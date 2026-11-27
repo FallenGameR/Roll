@@ -6,6 +6,9 @@
 ;   settings opened                    (Settings.qml, onOpened)
 ;   loading indicator went away after it was drawn (Loading.qml, hide)
 ;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
+;   search: Filters or sort dropdown opened or closed (ExplorerSearch.qml, isOpen)
+;   document closed, back to the library (MainView.qml, documentViewActive
+;   goes false; folder navigation inside the library does not touch it)
 ;   library got input focus back for the first time after waking up or after
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
@@ -193,8 +196,8 @@ AFFECT [[/qml/device/view/documentview/DocumentView.qml]]
     END TRAVERSE
 END AFFECT
 
-; PIN accepted: the unlock screen goes away. MainView lives all the time, so
-; the timer survives the unlock window closing.
+; PIN accepted: the unlock screen goes away. Document closed: the library
+; comes back. MainView lives all the time, so the timers survive both.
 AFFECT [[/qml/device/view/main/MainView.qml]]
     IMPORT [[com.remarkable]] 1.0
     TRAVERSE [[Background]]#[[root]]
@@ -216,6 +219,61 @@ AFFECT [[/qml/device/view/main/MainView.qml]]
                     ~&if&~ (!~&root&~.~&passcodeHandler&~.~&userLocked&~) {
                         gbaUnlockTimer.~&restart&~();
                     }
+                }
+            }
+
+            ~&Timer&~ {
+                ~&id&~: gbaCloseTimer
+                ~&interval&~: 400
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&console&~.~&log&~("gba: document closed");
+                    ~&EPFramebuffer&~.clearGhosting();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&root&~
+                function onDocumentViewActiveChanged() {
+                    ~&if&~ (!~&root&~.~&documentViewActive&~) {
+                        gbaCloseTimer.~&restart&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Search: the Filters or sort (Relevance...) dropdown opened or closed. Only
+; the search view; the folder sort dropdown in the library is left alone.
+AFFECT [[/qml/device/view/syncserviceexplorer/ExplorerSearch.qml]]
+    IMPORT [[com.remarkable]] 1.0
+    TRAVERSE [[FocusScope]]#[[search]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&Timer&~ {
+                ~&id&~: gbaSearchTimer
+                ~&interval&~: 500
+                ~&repeat&~: ~&false&~
+                ~&onTriggered&~: {
+                    ~&if&~ (~&search&~.~&visible&~) {
+                        ~&console&~.~&log&~("gba: search dropdown");
+                        ~&EPFramebuffer&~.clearGhosting();
+                    }
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&searchFilterDropdown&~
+                function onIsOpenChanged() {
+                    gbaSearchTimer.~&restart&~();
+                }
+            }
+
+            ~&Connections&~ {
+                ~&target&~: ~&sortDropdown&~
+                function onIsOpenChanged() {
+                    gbaSearchTimer.~&restart&~();
                 }
             }
         }

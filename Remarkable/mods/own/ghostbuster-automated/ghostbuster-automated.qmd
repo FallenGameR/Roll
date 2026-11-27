@@ -6,6 +6,9 @@
 ;   settings opened                    (Settings.qml, onOpened)
 ;   loading indicator went away after it was drawn (Loading.qml, hide)
 ;   PIN accepted                       (MainView.qml, passcodeHandler.userLocked)
+;   search: Filters or sort dropdown opened or closed (ExplorerSearch.qml, isOpen)
+;   document closed, back to the library (MainView.qml, documentViewActive
+;   goes false; folder navigation inside the library does not touch it)
 ;   library got input focus back for the first time after waking up or after
 ;   xochitl start, that is after the PIN screen (Navigator.qml: BatteryManager,
 ;   activeFocus)
@@ -193,8 +196,8 @@ AFFECT [[1224665461898798997]]
     END TRAVERSE
 END AFFECT
 
-; PIN accepted: the unlock screen goes away. MainView lives all the time, so
-; the timer survives the unlock window closing.
+; PIN accepted: the unlock screen goes away. Document closed: the library
+; comes back. MainView lives all the time, so the timers survive both.
 AFFECT [[2328484894988065446]]
     IMPORT [[197082280.8400022150001312063]] 1.0
     TRAVERSE [[8397788359424131273]]#[[6504254477]]
@@ -216,6 +219,61 @@ AFFECT [[2328484894988065446]]
                     ~&5972376&~ (!~&6504254477&~.~&9729068523592542297&~.~&8400180753700265146&~) {
                         gbaUnlockTimer.~&233743006639214&~();
                     }
+                }
+            }
+
+            ~&214604601930&~ {
+                ~&5972374&~: gbaCloseTimer
+                ~&7713147298280334&~: 400
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&233724020023100&~.~&197092075&~("gba: document closed");
+                    ~&6687579895491175043&~.clearGhosting();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&6504254477&~
+                function onDocumentViewActiveChanged() {
+                    ~&5972376&~ (!~&6504254477&~.~&533861137338760383&~) {
+                        gbaCloseTimer.~&233743006639214&~();
+                    }
+                }
+            }
+        }
+    END TRAVERSE
+END AFFECT
+
+; Search: the Filters or sort (Relevance...) dropdown opened or closed. Only
+; the search view; the folder sort dropdown in the library is left alone.
+AFFECT [[12882091645407798375]]
+    IMPORT [[197082280.8400022150001312063]] 1.0
+    TRAVERSE [[8397993708429497603]]#[[7083159899711]]
+        LOCATE AFTER ALL
+        INSERT {
+            ~&214604601930&~ {
+                ~&5972374&~: gbaSearchTimer
+                ~&7713147298280334&~: 500
+                ~&7083121289162&~: ~&214625660372&~
+                ~&495358363329399331&~: {
+                    ~&5972376&~ (~&7083159899711&~.~&233748328658231&~) {
+                        ~&233724020023100&~.~&197092075&~("gba: search dropdown");
+                        ~&6687579895491175043&~.clearGhosting();
+                    }
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&10951699917234028818&~
+                function onIsOpenChanged() {
+                    gbaSearchTimer.~&233743006639214&~();
+                }
+            }
+
+            ~&428051690305612204&~ {
+                ~&7083194890448&~: ~&16551919589909039006&~
+                function onIsOpenChanged() {
+                    gbaSearchTimer.~&233743006639214&~();
                 }
             }
         }
