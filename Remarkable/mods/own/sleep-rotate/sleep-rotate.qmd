@@ -19,7 +19,7 @@ AFFECT [[15136737896827182809]]
     TRAVERSE [[7711468349764991]]#[[6504254477]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&197088788&~ gbaSleepCount: 2
+            property ~&197088788&~ gbaSleepCount: 3
             property ~&7083178290016&~ gbaCarouselPath: ~&6504254477&~.~&7712874732231975&~ ? ("" + ~&6504254477&~.~&7712874732231975&~.~&254533793748405209&~) : ""
             property ~&197088788&~ gbaSleepShown: {
                 ~&214622607920&~ dot = ~&6504254477&~.gbaCarouselPath.lastIndexOf(".png");
