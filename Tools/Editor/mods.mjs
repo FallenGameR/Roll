@@ -56,7 +56,7 @@ const RU = {
     "ghostbuster-automated.qmd": "Сам перерисовывает экран там, где остаются следы: после ввода PIN и первой отрисовки библиотеки, при входе в настройки, после значка ожидания. В PDF ещё после медленного перелистывания, закрытия панельки на панели инструментов и скрытия самой панели; в заметках и EPUB этого не делает.",
     "sleep-rotate.qmd": "Своя картинка сна на весь экран, без рамки, и они сменяются от сна к сну: sleep-1.png, sleep-2.png... из /home/root/sleepscreen. Номер берёт у встроенной карусели прошивки.",
     "tap-page-turn.qmd": "Тап по левой или правой четверти экрана ниже верхней трети листает назад или вперёд; длинную страницу сначала прокручивает. Когда панель скрыта, работает всегда; когда показана, только если включена кнопка-книга на панели (или пункт Tap Turn в меню, если панели тесно). Один файл вместо пары модов Vellum.",
-    "touch-lock.qmd": "Кнопка на панели: заблокировать касания, перо работает. Копия touch-lock из Vellum со своими иконками: тонкий открытый замок с откинутой дужкой и жирный закрытый. Иконки ставятся в xovi/exthome/own-assets/touch-lock.",
+    "touch-lock.qmd": "Кнопка-замок на панели: блокирует касания, перо работает. Если панели тесно, кнопка уходит в меню.",
 };
 
 const ACTION_NAMES = {
@@ -224,7 +224,7 @@ echo @@HASHTAB; cat ${X}/hashtab.os 2>/dev/null; [ -f /tmp/hashtab.running ] && 
 echo @@INSTALLED; cat /home/root/.vellum/lib/apk/db/installed
 echo @@INDEX; for f in /home/root/.vellum/etc/apk/cache/APKINDEX.*.tar.gz /home/root/.vellum/local-repo/*/APKINDEX.tar.gz; do [ -f "$f" ] && tar -xzOf "$f" APKINDEX; echo; done
 echo @@FILES; find ${Q} ${E} ${D} -type f 2>/dev/null
-echo @@SUMS; find ${Q} ${D} -name "*.qmd" -type f -exec md5sum {} + 2>/dev/null
+echo @@SUMS; find ${Q} ${D} -name "*.qmd" -type f -exec md5sum {} + 2>/dev/null; find ${ASSETS} -type f -exec md5sum {} + 2>/dev/null
 echo @@LOADERS; for f in ${Q}/_*.qmd; do [ -f "$f" ] && cat "$f"; echo; done
 echo @@END
 `;
@@ -331,7 +331,8 @@ function build(s) {
             version: "", fresh: null, compatible: true, needs: [], requiredBy: [],
             desc: RU[name] ?? "", files: [...it.files], local: l?.local ?? null, assets: l?.assets ?? null, assetsDir: l ? `${ASSETS}/${l.source}` : null,
             // Обновлять есть что, только если файл на планшете не совпадает с нашим.
-            differs: !!l && [...it.files].some((f) => { const h = sums.get(f) ?? sums.get(D + f); return h && h !== md5(l.local); }),
+            differs: !!l && ([...it.files].some((f) => { const h = sums.get(f) ?? sums.get(D + f); return h && h !== md5(l.local); }) ||
+                (it.on + it.off > 0 && !!l.assets && readdirSync(l.assets).some((a) => sums.get(`${ASSETS}/${l.source}/${a}`) !== md5(join(l.assets, a))))),
         });
     }
 

@@ -19,7 +19,7 @@ AFFECT [[/qt/qml/xofm/modules/sleepscreen/qml/default/sleep-window-opaque.qml]]
     TRAVERSE [[BaseView]]#[[root]]
         LOCATE AFTER ALL
         INSERT {
-            property ~&int&~ gbaSleepCount: 3
+            property ~&int&~ gbaSleepCount: 2
             property ~&string&~ gbaCarouselPath: ~&root&~.~&carousel&~ ? ("" + ~&root&~.~&carousel&~.~&imagePath&~) : ""
             property ~&int&~ gbaSleepShown: {
                 ~&const&~ dot = ~&root&~.gbaCarouselPath.lastIndexOf(".png");
