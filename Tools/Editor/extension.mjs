@@ -68,12 +68,12 @@ async function ensureServer() {
             }
             const query = Object.fromEntries(url.searchParams);
             const out = await route({ session, body: await readBody(req), query });
-            // Маршрут может отдать файл картинки: { file: путь }.
-            if (out && out.file) {
-                const type = IMAGE_TYPES[extname(out.file).toLowerCase()];
+            // Маршрут может отдать файл картинки: { image: путь }.
+            if (out && out.image) {
+                const type = IMAGE_TYPES[extname(out.image).toLowerCase()];
                 if (!type) throw new Error("не картинка");
                 res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-cache" });
-                res.end(await readFile(out.file));
+                res.end(await readFile(out.image));
                 return;
             }
             res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });

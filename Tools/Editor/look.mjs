@@ -266,7 +266,7 @@ export const routes = {
         const state = await load(session, query.i);
         const path = state?.groups?.[+query.g]?.images?.[+query.n]?.path;
         if (!path || !existsSync(path)) throw fail("no_image", "нет такой картинки");
-        return { file: path };
+        return { image: path };
     },
     // { rid, g, n?, rating?: "like"|null, hidden?: bool, comment? }; без n - комментарий группы.
     "/mark": async ({ session, query, body }) => serial(async () => {
