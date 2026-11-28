@@ -92,8 +92,7 @@ function Get-RemarkableCredentialPath {
     )
 
     $safe = ($Name -replace '[^\w\-]+', '-').Trim('-')
-    $dir = if ($PROFILE) { Split-Path $PROFILE.CurrentUserAllHosts }
-           else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell' }
+    $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell'
     Join-Path $dir "remarkable-$safe.credential"
 }
 
