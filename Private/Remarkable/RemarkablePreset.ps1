@@ -80,6 +80,51 @@ function Get-ActiveRemarkablePreset {
     $data.presets[[int]$data.active]
 }
 
+# Пароль для наших SSH-команд лежит зашифрованным (DPAPI, только эта
+# учётка на этом компьютере) рядом с профилем PowerShell:
+# remarkable-<пресет>.credential. Маска /*.credential уже стоит в
+# .gitignore профиля. В rcu.ini пароль остаётся тоже: RCU-CLI читает его
+# только оттуда.
+function Get-RemarkableCredentialPath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    $safe = ($Name -replace '[^\w\-]+', '-').Trim('-')
+    $dir = if ($PROFILE) { Split-Path $PROFILE.CurrentUserAllHosts }
+           else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'PowerShell' }
+    Join-Path $dir "remarkable-$safe.credential"
+}
+
+function Save-RemarkableCredential {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [Parameter(Mandatory)]
+        [string]$User,
+
+        [Parameter(Mandatory)]
+        [securestring]$Password
+    )
+
+    [pscredential]::new($User, $Password) | Export-Clixml -LiteralPath (Get-RemarkableCredentialPath $Name)
+}
+
+function Get-RemarkablePassword {
+    param(
+        [Parameter(Mandatory)]
+        $Preset
+    )
+
+    $path = Get-RemarkableCredentialPath $Preset.name
+    if (Test-Path -LiteralPath $path) {
+        return (Import-Clixml -LiteralPath $path).GetNetworkCredential().Password
+    }
+    $Preset.password
+}
+
 function Test-RemarkablePort {
     param(
         [Parameter(Mandatory)]

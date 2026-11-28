@@ -7,7 +7,9 @@
     Пишет пресет в %APPDATA%\davisr\rcu.ini, откуда его берёт RCU-CLI.
     Файл локальный, в git не попадает. Пароль спрашивается скрыто и
     нигде не печатается; если его не задать, у существующего пресета
-    остаётся прежний.
+    остаётся прежний. Новый пароль ещё и шифруется (DPAPI) в
+    remarkable-<пресет>.credential рядом с профилем PowerShell: наши
+    SSH-команды берут его оттуда, а rcu.ini нужен только RCU-CLI.
 
     Пароль и адрес - на планшете: Settings - Help - About - Copyrights
     and licenses, раздел GPLv3 Compliance. По кабелю адрес 10.11.99.1.
@@ -82,5 +84,8 @@ function Set-RemarkableConnection {
         return
     }
     Write-RemarkablePresets ([pscustomobject]@{ active = $index; presets = $presets.ToArray() })
+    if ($NewPassword) {
+        Save-RemarkableCredential -Name $Name -User $preset.username -Password $secure
+    }
     Get-RemarkableConnection | Where-Object Name -eq $Name
 }

@@ -56,11 +56,16 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
 ## Remarkable
 
 Планшет ходит по Wi-Fi, адрес и пароль SSH - в пресете RCU, в
-`%APPDATA%\davisr\rcu.ini`. Это единственное место, где лежит пароль:
-файл локальный и в git не попадает. Смотреть и править пресет -
-`Get-RemarkableConnection` и `Set-RemarkableConnection`, обе пароль
-не печатают. Сам `rcu.ini` целиком не выводить: пароль там внутри JSON
-пресетов, и маска по строкам `password=` его не ловит.
+`%APPDATA%\davisr\rcu.ini`: файл локальный и в git не попадает, но пароль
+там открытым текстом, потому что так его читает RCU-CLI. Наши SSH-команды
+берут пароль из зашифрованной (DPAPI) копии
+`Documents\PowerShell\remarkable-<пресет>.credential`, маска
+`/*.credential` стоит в `.gitignore` профиля; если копии нет, берут из
+`rcu.ini`. Обе пишет `Set-RemarkableConnection -NewPassword`: пароль
+вводит сам Мастер в своём терминале, в чат его не присылают. Смотреть и
+править пресет - `Get-RemarkableConnection` и `Set-RemarkableConnection`,
+обе пароль не печатают. Сам `rcu.ini` целиком не выводить: пароль там
+внутри JSON пресетов, и маска по строкам `password=` его не ловит.
 
 Команды делятся по транспорту, потому что RCU-CLI годится не на всё:
 
@@ -71,7 +76,7 @@ open_canvas({ canvasId: "roll-panel", instanceId: "roll-panel" })
   RCU-CLI печатает в cp1252 и падает на первом кириллическом имени, а
   `PYTHONIOENCODING` и `PYTHONUTF8` собранный exe игнорирует;
 - ssh берёт пароль через `SSH_ASKPASS` из `Tools\Remarkable\askpass.cmd`,
-  который читает активный пресет. Скрипт askpass лежит в `Tools`, а не
+  который читает пароль активного пресета. Скрипт askpass лежит в `Tools`, а не
   в `Private`, потому что модуль при импорте исполняет все `.ps1` из
   `Private`, и askpass напечатал бы пароль.
 
